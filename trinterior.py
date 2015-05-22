@@ -4,14 +4,17 @@ import numpy as np
 
 
 def dot(u,v):
+    '''Dot Product of two vectors'''
     return u[0]*v[0] + u[1]*v[1]
 
 def sub(u,v):
+    '''Subtract two vectors '''
     return (u[0]-v[0],u[1]-v[1])
 
 def condition(P, A, B, C):
     '''Returns a Boolean whether P is inside the triangle defined by vertices A,B,C'''
     # Code shamelessly copied from http://www.blackpawn.com/texts/pointinpoly/
+    # Uses barycentric coordinates to find whether the point is inside the triangle
 
     v0 = sub(C,A)
     v1 = sub(B,A)
@@ -31,11 +34,9 @@ def condition(P, A, B, C):
     
     return u >= 0 and v >= 0 and u + v < 1
 
-    
-    
-
 
 def find(v,triangles):
+    '''Given a point v and a list of triangles defined by three verticies, this function will return the indicies of the triangles in which the point is inside the triangle.'''
     length = len(triangles)
     indices = []
     for i in range(length):
@@ -44,16 +45,13 @@ def find(v,triangles):
     
     return indices
         
+### the following code is for testing purposes ###
 
-sampletriangles = np.load("triangles.npy")
+
+sampletriangles = np.load("triangles.npy") #load a working example of a list of triangles formed by Delaunay Triangulization, for use in the test function below
 def test():
+    '''a function used to time the 'condition' algorithm'''
     find([0.5,0.5],sampletriangles)
 
 
     
-#u = (0.3,0.3)
-#x = (0.1,0.1)
-#y = (0.5,5)
-#z = (3,0)
-
-#print tot(u,x,y,z)
