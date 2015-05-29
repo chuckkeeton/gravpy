@@ -3,11 +3,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import Delaunay 
-
+import random
 
 import trinterior as trint
-
-import random
 
 b = 1 # radius of magnification function
 
@@ -29,6 +27,7 @@ def condition(x,y,coord):
         return NaN
 
 def carmapping(stack):
+    '''mapping of cartesian coordinates from image to source plane'''
     newstack = []
     for i in stack:
         (x,y) = i
@@ -36,6 +35,7 @@ def carmapping(stack):
     return newstack
         
 def polmapping(stack):
+    '''mapping of polar coordinates from image to source plane'''
     newstack = []
     for i in stack:
         (r,th) = i
@@ -43,6 +43,7 @@ def polmapping(stack):
     return newstack
 
 def polartocar(stack):
+    '''convert polar coordinates to cartesian coordinates'''
     newstack = []
     for i in stack:
         (r,th) = i
@@ -95,8 +96,7 @@ def points(stack,xran,yran,coord,n=0):
                 stack.append([xran[i],yran[j]])
                 stack.append([xran[i],yran[j+1]])
 
-                    
-
+##### SCRIPT BEGINS ######
     
 # plot our function, 200 points
 funx = np.linspace(-1,1,200,endpoint=False)

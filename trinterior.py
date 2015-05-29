@@ -53,5 +53,8 @@ def test():
     '''a function used to time the 'condition' algorithm'''
     find([0.5,0.5],sampletriangles)
 
+# run from the command line to time the function:
+## python -m timeit -v -s'import trinterior' 'trinterior.test()'
+
 
     
