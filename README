@@ -1,0 +1,11 @@
+Welcome!
+
+This project is a Python implementation of the general lens solver GravLens. 
+
+To run the program, execute the 'grid.py' file.
+
+At this current version, this project does the following:
+* Take the magnification function for a Single Isothermal Sphere (SIE) and compute the transformation of coordinates from the image plane to the source plane.
+* Subgridding around the magnification function.
+* Given a point in the source plane, find the position(s) in the image plane. 
+  * Current Version: Only determines the triangle(s) in which the true point resides, root finding is a TODO task. 
