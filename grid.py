@@ -26,29 +26,30 @@ def condition(x,y,coord):
     else:
         return NaN
 
-def carmapping(stack):
+# TODO: use numpy vectorize function to speed up these mapping loops and conversions
+def carmapping(x,y):
     '''mapping of cartesian coordinates from image to source plane'''
-    newstack = []
-    for i in stack:
-        (x,y) = i
-        newstack.append([x - b*x/np.sqrt(x**2 + y**2), y - b*y/np.sqrt(x**2 + y **2)])
-    return newstack
-        
-def polmapping(stack):
-    '''mapping of polar coordinates from image to source plane'''
-    newstack = []
-    for i in stack:
-        (r,th) = i
-        newstack.append( [np.cos(th)(r-b),np.sin(th)(r-b)] )
-    return newstack
+    x = np.array(x)
+    y = np.array(y)
+    return np.transpose([x - b*x/np.sqrt(x**2 + y**2), y - b*y/np.sqrt(x**2 + y **2)])
 
-def polartocar(stack):
+
+        
+def polmapping(r,th):
+    '''mapping of polar coordinates from image to source plane'''
+    r  = np.array(r)
+    th = np.array(th)
+    
+    return np.transpose( [np.cos(th)(r-b), np.sin(th)(r-b)] )
+    
+
+def polartocar(r,th):
     '''convert polar coordinates to cartesian coordinates'''
-    newstack = []
-    for i in stack:
-        (r,th) = i
-        newstack.append([r*np.cos(th),r*np.sin(th)])
-    return newstack
+    r  = np.array(r)
+    th = np.array(th)
+            
+    return np.transpose([r*np.cos(th),r*np.sin(th)])
+    
 
 def relation(x,y,coord):
     '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
@@ -64,7 +65,11 @@ def relation(x,y,coord):
 
 def buildrelations(xran,yran,coord):
     '''applies relation() on 2D range specified by xran and yran. Returns a 2D array.'''
-    return [[relation(j,i,coord) for i in yran] for j in xran]
+    
+    xx,yy = np.meshgrid(xran,yran,sparse=True)
+    
+    return np.transpose(relation(xx,yy,coord))
+    
     
 def changep(fir,sec,thr,frt):
     '''[[fir, sec],[thr,frt]] - returns true if there is a change in magnification in the box specified'''
@@ -111,7 +116,7 @@ critpairs = zip(critx,crity)
 
 ## caustics?
 
-transcrit = np.array(carmapping(critpairs))
+transcrit = carmapping(critx,crity)
 
 # initial cartesian grid, coarse,
 spacing = 0.5
@@ -128,20 +133,22 @@ thetadivisions = 42
 r = np.arange(0,rupper+rspacing,rspacing)
 theta = np.linspace(0,2*np.pi,thetadivisions)
 
+## the rs and thetas formed from a cartesian product. Used for vector operations.
+rs = np.tile(r,len(theta))
+thetas = np.repeat(theta,len(r))
 
-polstack = [] # stack for holding the polar points
-[[polstack.append((ra,th)) for th in theta] for ra in r]
+#polstack = [] # stack for holding the polar points #needed if we subgrid on polar grids
 carstack = [] # stack for holding the cartesian points
 
 # SUBGRIDDING!!!!
-#points(polstack,r,theta,'pol')
+#points(polstack,r,theta,'pol') # if we wanted to subgrid on the polar grid, uncomment
 points(carstack,x,y1,'car') #generate subgrid on cartesian grid on for the +y axis range
 points(carstack,x,y2,'car') #generate subgrid on cartesian grid on for the -y axis range
 
 carstack = np.array(carstack) 
-polstack = np.array(polartocar(polstack))
+polstack = np.array(polartocar(rs,thetas))
 stack = np.concatenate((carstack,polstack),axis=0) #combine list of cartesian and polar pairs
-transformed = np.array(carmapping(stack)) #transform pairs from image to source plane
+transformed = np.array(carmapping(*np.transpose(stack))) #transform pairs from image to source plane
 
 dpoints = Delaunay(stack) # generate Delaunay object for triangulization/triangles
 
@@ -153,7 +160,7 @@ imagetri= stack[dpoints.simplices.copy()] #triangles on the image plane
 
 indices = trint.find(image,lenstri) #list of which triangles contain point on source plane
 sourcetri = imagetri[indices] 
-sourcepos = [np.sum(t,axis=0)/3.0 for t in sourcetri] #list of the centroid coordinates for the triangles which contain the point 'image'
+sourcepos = np.sum(sourcetri,axis=1)/3.0 #list of the centroid coordinates for the triangles which contain the point 'image'
 
 # plot them all
 
@@ -164,10 +171,9 @@ plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
 
 plt.plot(critx,crity,zorder=2) # plot of critical curve(s)
 
-#plt.plot(*np.transpose(stack),marker=',',color='m',ls='') # plot of the points on grid
 plt.triplot(stack[:,0],stack[:,1], dpoints.simplices.copy(),zorder=1) # plot of the Delaunay Triangulization
 
-plt.scatter(*zip(*sourcepos), marker='*', color='black',s=100, zorder=2) # plot of the (approximate) positions of the image
+plt.scatter(*zip(*sourcepos), marker='*', color='black',s=100, zorder=2) # plot of the (approximate/centroid) positions of the image
 
 plt.subplot(1,2,2) # source plane
 plt.title('Source Plane')

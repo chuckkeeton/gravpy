@@ -11,10 +11,12 @@ def sub(u,v):
     '''Subtract two vectors '''
     return (u[0]-v[0],u[1]-v[1])
 
-def condition(P, A, B, C):
+def condition(P, tri):
     '''Returns a Boolean whether P is inside the triangle defined by vertices A,B,C'''
     # Code shamelessly copied from http://www.blackpawn.com/texts/pointinpoly/
     # Uses barycentric coordinates to find whether the point is inside the triangle
+    (A,B,C) = tri
+    
 
     v0 = sub(C,A)
     v1 = sub(B,A)
@@ -40,7 +42,7 @@ def find(v,triangles):
     length = len(triangles)
     indices = []
     for i in range(length):
-        if condition(v,*triangles[i]):
+        if condition(v,triangles[i]):
             indices.append(i)
     
     return indices
