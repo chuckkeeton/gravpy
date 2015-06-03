@@ -17,6 +17,26 @@ def nf(x):
     '''our magnification function (negative y-axis values)'''
     return -1* np.sqrt(b**2-x**2)
     
+def carmapping(x,y):
+    '''mapping of cartesian coordinates from image to source plane'''
+    x = np.array(x)
+    y = np.array(y)
+    return np.transpose([x - b*x/np.sqrt(x**2 + y**2), y - b*y/np.sqrt(x**2 + y **2)])
+
+def polmapping(r,th):
+    '''mapping of polar coordinates from image to source plane'''
+    r  = np.array(r)
+    th = np.array(th)
+    
+    return np.transpose( [np.cos(th)(r-b), np.sin(th)(r-b)] )
+
+def polartocar(r,th):
+    '''convert polar coordinates to cartesian coordinates'''
+    r  = np.array(r)
+    th = np.array(th)
+            
+    return np.transpose([r*np.cos(th),r*np.sin(th)])
+
 def condition(x,y,coord):
     '''returns the distance between the critical curve and the point '''
     if coord == 'car':
@@ -26,50 +46,16 @@ def condition(x,y,coord):
     else:
         return NaN
 
-# TODO: use numpy vectorize function to speed up these mapping loops and conversions
-def carmapping(x,y):
-    '''mapping of cartesian coordinates from image to source plane'''
-    x = np.array(x)
-    y = np.array(y)
-    return np.transpose([x - b*x/np.sqrt(x**2 + y**2), y - b*y/np.sqrt(x**2 + y **2)])
-
-
-        
-def polmapping(r,th):
-    '''mapping of polar coordinates from image to source plane'''
-    r  = np.array(r)
-    th = np.array(th)
-    
-    return np.transpose( [np.cos(th)(r-b), np.sin(th)(r-b)] )
-    
-
-def polartocar(r,th):
-    '''convert polar coordinates to cartesian coordinates'''
-    r  = np.array(r)
-    th = np.array(th)
-            
-    return np.transpose([r*np.cos(th),r*np.sin(th)])
-    
-
 def relation(x,y,coord):
     '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
     dif = condition(x,y,coord)
     return np.sign(dif) # -1 for inside, +1 for outside, 0 for exactly on
 
-#    if dif < 0: 
-#        return -1
-#    elif dif > 0:
-#        return 1
-#    else: return 0
-
-
 def buildrelations(xran,yran,coord):
     '''applies relation() on 2D range specified by xran and yran. Returns a 2D array.'''
-    
     xx,yy = np.meshgrid(xran,yran,sparse=True)
     
     return np.transpose(relation(xx,yy,coord))
-    
     
 def changep(fir,sec,thr,frt):
     '''[[fir, sec],[thr,frt]] - returns true if there is a change in magnification in the box specified'''
@@ -80,22 +66,16 @@ RECURSEDEPTH = 4 #just here for future purpose when we want to set the max depth
 def points(stack,xran,yran,coord,n=0):
     '''collects the points around our magnification function and appends them to the 'stack'. Subdivides grid by 2 in each recursion.'''
     mat = buildrelations(xran,yran,coord)
-    xindex = len(xran)
-    yindex = len(yran)
-    for i in range(xindex-1):
-        for j in range(yindex-1):
-            if changep(mat[i][j],mat[i][j+1],mat[i+1][j],mat[i+1][j+1]):
-                if n == RECURSEDEPTH:
-                    stack.append([xran[i+1],yran[j]])
-                    stack.append([xran[i+1],yran[j+1]])
-                    stack.append([xran[i],yran[j]])
-                    stack.append([xran[i],yran[j+1]])
-                else: 
-                    points(stack,
-                           np.linspace(xran[i],xran[i+1],3,endpoint=True),
-                           np.linspace(yran[j],yran[j+1],3,endpoint=True),
-                           coord,n+1)
-            else: #if n == 0: 
+    xlen = len(xran)
+    ylen = len(yran)
+    for i in range(xlen-1):
+        for j in range(ylen-1):
+            if n != RECURSEDEPTH and changep(mat[i][j],mat[i][j+1],mat[i+1][j],mat[i+1][j+1]):
+                points(stack,
+                       np.linspace(xran[i],xran[i+1],3,endpoint=True),
+                       np.linspace(yran[j],yran[j+1],3,endpoint=True),
+                       coord,n+1)
+            else:
                 stack.append([xran[i+1],yran[j]])
                 stack.append([xran[i+1],yran[j+1]])
                 stack.append([xran[i],yran[j]])
@@ -105,8 +85,8 @@ def points(stack,xran,yran,coord,n=0):
     
 # plot our function, 200 points
 funx = np.linspace(-1,1,200,endpoint=False)
-funy1 = [f(i) for i in funx]
-funy2 = [nf(i) for i in funx]
+funy1 = f(funx)
+funy2 = nf(funx) 
 
 ## critical curves
 critx = np.hstack((funx,funx[::-1])) 
