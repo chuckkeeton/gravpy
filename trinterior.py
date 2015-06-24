@@ -59,11 +59,30 @@ def np_inside_triangle(A,B,C,P):
     return indices
 
 def find2(p,triangles):
-    '''Wrapper for the algorithm that uses numpy vector operations. Similiar to the 'find()' wrapper. Use this one for better speed!'''
+    '''Wrapper for the algorithm that uses numpy vector operations. Use this one for better speed!'''
     a,b,c = np.transpose(triangles,[1,0,2])
     return np_inside_triangle(a,b,c,p)
 
+def np_inside_triangle_dots(A,B,C,P):
+    v0 = C-A
+    v1 = B-A
+    v2 = P-A
 
+    dot00 = np.dot(v0, v0)
+    dot01 = np.dot(v0, v1)
+    dot02 = np.dot(v0, v2)
+    dot11 = np.dot(v1, v1)
+    dot12 = np.dot(v1, v2)
+
+    invDenom = 1 / (dot00 * dot11 - dot01 * dot01)
+    u = (dot11 * dot02 - dot01 * dot12) * invDenom
+    v = (dot00 * dot12 - dot01 * dot02) * invDenom
+
+    coords = np.vstack((u,v,1-u-v))
+    indices = np.nonzero(np.all(coords>=0,axis=0)) #invalid value in greater_equal
+    
+    return indices
+    
 ### the following code is for testing purposes ###
 
 
