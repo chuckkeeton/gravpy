@@ -56,7 +56,7 @@ def points(stack,xran,yran,coord,modelargs,n=0):
                 stack.append([xran[i],yran[j]])
                 stack.append([xran[i],yran[j+1]])
 
-def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics=False):
+def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False):
     '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
     x = xran[0:-1]
     y = yran[0:-1]
@@ -69,16 +69,16 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics=False):
 
     temp_cells = cells.copy()
     cells_sel = points5_wrapper(temp_cells,modelargs)
-    if not caustics:
+    if not caustics_mode:
         output_pairs = grid_pairs.copy()
 
     for i in range(recurse_depth):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
         cells_sel = points5_wrapper(temp_cells,modelargs)
-        if not caustics:
+        if not caustics_mode:
             output_pairs = np.vstack((output_pairs,np.reshape(cells_sel,(-1,2))))
 
-    if not caustics:
+    if not caustics_mode:
         return output_pairs
     else:
         return cells_sel
@@ -149,7 +149,7 @@ def generate_ranges(carargs,polargs,modelargs):
     thetas = np.repeat(theta,len(r))
     
     ## critical curves
-    critx, crity = np.transpose(points5(x,y,spacing,modelargs,recurse_depth=8,caustics=True))
+    critx, crity = np.transpose(points5(x,y,spacing,modelargs,recurse_depth=8,caustics_mode=True))
 
     ## caustics?
     model = models_list[modelargs[0]]
