@@ -8,31 +8,20 @@ import random
 
 import trinterior as trint
 
-def f(x,b):
-    '''our magnification function'''
-    return np.sqrt(b**2-x**2)
-    
-def nf(x,b):
-    '''our magnification function (negative y-axis values)'''
-    return -1* np.sqrt(b**2-x**2)
-    
-def mapping(v,u,b):
-    w,z = u #image
-    x,y = v #actual position we want to find
-    return [x - b*x/np.sqrt(x**2 + y**2) - w, y - b*y/np.sqrt(x**2 + y **2) - z]
+# lens model modules: 'models_list[modelargs[0]]' gives us the module to use
+import sis
+models_list = {'SIS':sis}   
 
-def carmapping(x,y,b):
-    '''mapping of cartesian coordinates from image to source plane'''
-    x = np.array(x)
-    y = np.array(y)
-    return np.transpose([x - b*x/np.sqrt(x**2 + y**2), y - b*y/np.sqrt(x**2 + y **2)])
+def relation(x,y,coord,modelargs):
+    '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
+    model = models_list[modelargs[0]]
+    dif = model.distance(x,y,coord,modelargs)
+    return np.sign(dif) # -1 for inside, +1 for outside, 0 for exactly on
 
-def polmapping(r,th,b):
-    '''mapping of polar coordinates from image to source plane'''
-    r  = np.array(r)
-    th = np.array(th)
-    
-    return np.transpose( [np.cos(th)*(r-b), np.sin(th)*(r-b)] )
+def buildrelations(xran,yran,coord,modelargs):
+    '''applies relation() on 2D range specified by xran and yran. Returns a 2D array.'''
+    xx,yy = np.meshgrid(xran,yran, sparse=True) #sparse =True for sparse matrices, gives a row (x) and column (y) vector. 
+    return np.transpose(relation(xx,yy,coord,modelargs))
 
 def polartocar(r,th):
     '''convert polar coordinates to cartesian coordinates'''
@@ -40,36 +29,18 @@ def polartocar(r,th):
     th = np.array(th)
             
     return np.transpose([r*np.cos(th),r*np.sin(th)])
-
-def distance(x,y,coord,b):
-    '''returns the distance between the critical curve and the point '''
-    if coord == 'car':
-        return np.sqrt(x**2 + y**2) - b
-    elif coord == 'pol':
-        return x - b
-    else:
-        raise NameError('Unrecogonized Coordinate System')
-
-def relation(x,y,coord,b):
-    '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
-    dif = distance(x,y,coord,b)
-    return np.sign(dif) # -1 for inside, +1 for outside, 0 for exactly on
-
-def buildrelations(xran,yran,coord,b):
-    '''applies relation() on 2D range specified by xran and yran. Returns a 2D array.'''
-    xx,yy = np.meshgrid(xran,yran, sparse=True) #sparse =True for sparse matrices, gives a row (x) and column (y) vector. 
-    return np.transpose(relation(xx,yy,coord,b))
     
 def mag_change(fir,sec,thr,frt):
-    '''[[fir, sec],[thr,frt]] - returns true if there is a change in magnification in the box specified. 
+    '''[[fir, sec],
+        [thr, frt]] - returns true if there is a change in magnification in the box specified. 
     Note: the order of the points inputted does not matter as long as rotation symmetry is preserved. (i.e. the right points are adjacent to each other)'''
     return (fir*sec < 1 or sec*frt < 1 or frt*thr < 1 or thr*fir < 1)
 
 RECURSEDEPTH = 4 #just here for future purpose when we want to set the max depth
 
-def points(stack,xran,yran,coord,b,n=0):
+def points(stack,xran,yran,coord,modelargs,n=0):
     '''collects the points around our magnification function and appends them to the 'stack'. Subdivides grid by 2 in each recursion.'''
-    mat = buildrelations(xran,yran,coord,b)
+    mat = buildrelations(xran,yran,coord,modelargs)
     xlen = len(xran)
     ylen = len(yran)
     for i in range(xlen-1):
@@ -78,14 +49,14 @@ def points(stack,xran,yran,coord,b,n=0):
                 points(stack,
                        np.linspace(xran[i],xran[i+1],3,endpoint=True),
                        np.linspace(yran[j],yran[j+1],3,endpoint=True),
-                       coord,b,n+1)
+                       coord,modelargs,n+1)
             else:
                 stack.append([xran[i+1],yran[j]])
                 stack.append([xran[i+1],yran[j+1]])
                 stack.append([xran[i],yran[j]])
                 stack.append([xran[i],yran[j+1]])
 
-def points5(xran,yran,spacing,b,recurse_depth=3,caustics=False):
+def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics=False):
     '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
     x = xran[0:-1]
     y = yran[0:-1]
@@ -97,13 +68,13 @@ def points5(xran,yran,spacing,b,recurse_depth=3,caustics=False):
     cells = np.transpose(gridm_x_y,[1,2,0])
 
     temp_cells = cells.copy()
-    cells_sel = points5_wrapper(temp_cells,b)
+    cells_sel = points5_wrapper(temp_cells,modelargs)
     if not caustics:
         output_pairs = grid_pairs.copy()
 
-    for i in range(recurse_depth-1):
+    for i in range(recurse_depth):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
-        cells_sel = points5_wrapper(temp_cells,b)
+        cells_sel = points5_wrapper(temp_cells,modelargs)
         if not caustics:
             output_pairs = np.vstack((output_pairs,np.reshape(cells_sel,(-1,2))))
 
@@ -113,19 +84,19 @@ def points5(xran,yran,spacing,b,recurse_depth=3,caustics=False):
         return cells_sel
     
     
-def points5_wrapper(cells,b):
+def points5_wrapper(cells,modelargs):
     '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
-    cells_mag = mag_of_cells(cells,b)
+    cells_mag = mag_of_cells(cells,modelargs)
     mag_change_mask = cell_mag_change(cells_mag)
     return cells[mag_change_mask]
     
-def mag_of_cells(cells,b):
+def mag_of_cells(cells,modelargs):
     '''Takes a list of cells and returns the magnification values for each point in the cells. Retains shape and order of the original list of cells.'''
     cells_x_y = np.reshape(cells,(-1,2))
     cells_x = cells_x_y[:,0]
     cells_y = cells_x_y[:,1]
 
-    mag_x_y = relation(cells_x,cells_y,'car',b)
+    mag_x_y = relation(cells_x,cells_y,'car',modelargs)
     
     return np.reshape(mag_x_y,(-1,4))
     
@@ -158,13 +129,9 @@ def subdivide_cells(cells,grid_spacing,cell_depth):
     return np.vstack((quadrant1,quadrant2,quadrant3,quadrant4))
 
 
-def generate_ranges(critargs,carargs,polargs):
+def generate_ranges(carargs,polargs,modelargs):
     # generate our critical curve function, 200 points
-    b, numpoints = critargs
-    funx = np.linspace(-b,b,numpoints,endpoint=False)
-    funy1 = f(funx,b)
-    funy2 = nf(funx,b) 
-
+    
     # initial cartesian grid, coarse,
     lowerend, upperend, spacing = carargs
     
@@ -182,33 +149,32 @@ def generate_ranges(critargs,carargs,polargs):
     thetas = np.repeat(theta,len(r))
     
     ## critical curves
-#    critx = np.hstack((funx,funx[::-1])) 
-#    crity = np.hstack((funy1,funy2[::-1])) #here and above the second pairs are put in reverse order so the line connecting the points makes a nice circe rather than crossing the origin to start from the other sid
-    critx, crity = np.transpose(points5(x,y,spacing,b,recurse_depth=8,caustics=True))
+    critx, crity = np.transpose(points5(x,y,spacing,modelargs,recurse_depth=8,caustics=True))
 
     ## caustics?
-
-    causticsx,causticsy = np.transpose(carmapping(critx,crity,b))
+    model = models_list[modelargs[0]]
+    causticsx,causticsy = np.transpose(model.carmapping(critx,crity,modelargs))
 
     return [ [critx, crity], [causticsx, causticsy], [x,y], [r, theta], [rs, thetas] ]
 
 
-def transformations(car_ranges, pol_ranges, spacing, b):
+def transformations(car_ranges, pol_ranges, spacing, modelargs):
 
     x,y = car_ranges
     r,theta = pol_ranges
+    model = models_list[modelargs[0]]
     
     polstack = [] # stack for holding the polar points #needed if we subgrid on polar grids
     carstack = [] # stack for holding the cartesian points
     stack = []
     #points(polstack,r,theta,'pol') # if we wanted to subgrid on the polar grid, uncomment
     #points2(carstack,x,y,'car',b) #generate subgrid on cartesian grid
-    carstack = points5(x,y,spacing,b)
+    carstack = points5(x,y,spacing,modelargs)
     stack = np.array(stack)
     carstack = np.array(carstack) 
     polstack = np.array(polartocar(r,theta)) #comment if we subgrid on polar grids
     stack = np.concatenate((carstack,polstack),axis=0) #combine list of cartesian and polar pairs
-    transformed = np.array(carmapping(stack[:,0],stack[:,1],b)) #transform pairs from image to source plane
+    transformed = np.array(model.carmapping(stack[:,0],stack[:,1],modelargs)) #transform pairs from image to source plane
 
     dpoints = Delaunay(stack) # generate Delaunay object for triangulization/triangles
 
@@ -216,7 +182,9 @@ def transformations(car_ranges, pol_ranges, spacing, b):
 
 
 
-def find_source(stack, transformed, simplices, image_loc,b):
+def find_source(stack, transformed, simplices, image_loc, modelargs):
+    model = models_list[modelargs[0]]
+
     lenstri = transformed[simplices] #triangles on the source plane
     imagetri= stack[simplices] #triangles on the image plane
 
@@ -224,15 +192,17 @@ def find_source(stack, transformed, simplices, image_loc,b):
 
     sourcetri = imagetri[indices] 
     sourcepos = np.sum(sourcetri.copy(),axis=1)/3.0 #list of the centroid coordinates for the triangles which contain the point 'image'
-    realpos = np.array([(op.root(lambda x0: mapping(x0,image_loc,b),v)).x for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
+    realpos = np.array(
+        [(op.root(lambda x0: model.mapping(x0,image_loc,modelargs),v)).x 
+         for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
 
-    return [sourcepos, realpos]
+    return realpos
 
 def plot_graphs(critx,crity,
                 causticsx,causticsy,
                 stack,transformed,
                 simplices,
-                sourcepos,realpos,image,
+                realpos,image,
                 lowerend,upperend):
 
     plt.subplot(1,2,1) # image plane
@@ -244,7 +214,7 @@ def plot_graphs(critx,crity,
 
     plt.triplot(stack[:,0],stack[:,1], simplices, color='blue', zorder=1) # plot of the Delaunay Triangulization
 
-    plt.scatter(*zip(*sourcepos), marker='*', color='black',s=100, zorder=2) # plot of the (approximate/centroid) positions of the image
+    #plt.scatter(*zip(*sourcepos), marker='*', color='black',s=100, zorder=2) # plot of the (approximate/centroid) positions of the image
     plt.scatter(*zip(*realpos), marker='*', color='purple', s=100, zorder=2)
 
     plt.subplot(1,2,2) # source plane
@@ -259,34 +229,39 @@ def plot_graphs(critx,crity,
     plt.show()
 
 
-def run(critargs,carargs,polargs,show_plot=True,image=np.random.uniform(-1,1,2)):
-    b = critargs[0]
+def run(carargs,polargs,modelargs,show_plot=True,image=np.random.uniform(-1,1,2)):
+    b = modelargs[1]
 
     lowerend, upperend, spacing = carargs
     
-    args = generate_ranges(critargs,carargs,polargs)
+    args = generate_ranges(carargs,polargs,modelargs)
     critx, crity = args[0]
     causticsx,causticsy = args[1]
     x,y = args[2]
     r,theta = args[3]
     rs,thetas = args[4]
 
-    stack, transformed, dpoints = transformations((x,y),(rs,thetas),spacing, b)
+    stack, transformed, dpoints = transformations((x,y),(rs,thetas),spacing, modelargs)
     
-    sourcepos, realpos = find_source(stack, transformed, dpoints.simplices.copy(), image, b)
+    realpos = find_source(stack, transformed, dpoints.simplices.copy(), image, modelargs)
 
     if show_plot:
-        plot_graphs(critx,crity,causticsx,causticsy,stack,transformed,dpoints.simplices.copy(),sourcepos,realpos,image,lowerend,upperend)
+        plot_graphs(
+            critx,crity,
+            causticsx,causticsy,
+            stack,transformed,dpoints.simplices.copy(),
+            realpos,image,
+            lowerend,upperend)
 
 
 #### sample parameter run ####
 
-pcritargs = [1.,200] #critical curve radius, number of points on critical curve function
+pmodelargs = ['SIS',1.0] #model string, - for SIS: radius
 pcarargs = [-2.5,2.5,0.5] # lower bound, upper bound, initial spacing (all 3 quantities apply the same to x and y axes)
 ppolargs = [0.3,0.03,42] # outer radius, radius spacing, number of divisions in angle (for 360 degrees)
 pimage = [0.6,-0.1] #image location -if- we want to specify
 
-run(pcritargs,pcarargs,ppolargs)
+run(pcarargs,ppolargs,pmodelargs)
 
 # [1,200], [-2.5,2.5,0.5], [0.3,0.03,42] # sample runtime parameters
 # cProfile.run('run([1,200], [-2.5,2.5,0.5], [0.3,0.03,42],show_plot=False)')
