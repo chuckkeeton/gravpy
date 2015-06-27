@@ -85,85 +85,7 @@ def points(stack,xran,yran,coord,b,n=0):
                 stack.append([xran[i],yran[j]])
                 stack.append([xran[i],yran[j+1]])
 
-###########START#############
-### trying different 'points' functions in order to avoid recursion ###
-def neg_mag(x,y):
-    r = np.sqrt(x**2+y**2)
-    mag = 1/(1-1/r)
-    return mag <= 0
-
-    
-def mag_limit(x,y,b):
-    r = np.sqrt(x**2+y**2)
-    mag = r/(r-b)
-    return mag > 3 or mag < -2
-    
-def sprinkle_points(stack,xran,yran,num):
-    xmin, xmax = xran
-    ymin, ymax = yran
-    for i in range(num):
-        stack.append(
-            (random.uniform(xmin,xmax), random.uniform(ymin,ymax)))
-
-def points2(stack,xran,yran,spacing,b):
-    xs = np.tile(xran,len(yran))
-    ys = np.repeat(yran,len(xran))
-    pairs = zip(xs,ys)
-    sides,neg_sides = 3,7
-    width,neg_width = spacing/sides,spacing/neg_sides
-    
-    for i in pairs:
-        x,y = i
-        #if neg_mag(x,y):
-         #   sprinkle_points(stack,(x-spacing/2.,x+spacing/2.),(y-spacing/2.,y+spacing/2.),200)
-        if mag_limit(x,y,b):
-            sprinkle_points(stack,(x-spacing/2.,x+spacing/2.),(y-spacing/2.,y+spacing/2.),100)
-            
-    stack += pairs
-
-def points3(xran,yran,spacing,b):
-    
-    mag_grid = buildrelations(xran,yran,'car',b)
-    xs,ys = np.meshgrid(xran,yran)
-            
-    magchange_grid = (scipy.ndimage.filters.generic_filter(mag_grid,(lambda x: mag_change(*x)),size=(2),mode='nearest')).astype(bool)
-
-    nearby_xs = np.repeat(xs[magchange_grid],100)
-    nearby_ys = np.repeat(ys[magchange_grid],100)
-    
-    rand_xs = np.random.uniform(nearby_xs-spacing,nearby_xs)
-    rand_ys = np.random.uniform(nearby_ys-spacing,nearby_ys)
-    
-    rand_pairs = np.column_stack((rand_xs.copy(),rand_ys.copy()))
-    
-    grid_pairs = np.column_stack((np.tile(xran,len(yran)),np.repeat(yran,len(xran))))
-
-    return np.vstack((rand_pairs.copy(),grid_pairs.copy()))
-    
-def points4(xran,yran,spacing,b):
-
-    x = np.arange(-2.5,2.5+spacing,spacing/10)
-    y = np.arange(-2.5,2.5+spacing,spacing/10)
-
-    mag_grid = buildrelations(x,y,'car',b)
-    xs,ys = np.meshgrid(x,y)
-            
-    magchange_grid = (scipy.ndimage.filters.generic_filter(mag_grid,(lambda x: mag_change(*x)),size=(2),mode='nearest')).astype(bool)
-    magchange_grid = np.roll(np.roll(magchange_grid,-1,axis=1),-1,axis=0)
-    
-    nearby_xs = xs[magchange_grid.copy()]
-    nearby_ys = ys[magchange_grid.copy()]
-    
-    nearby_pairs =  np.column_stack((nearby_xs.copy(),nearby_ys.copy()))
-    grid_pairs = np.column_stack((np.tile(xran,len(yran)),np.repeat(yran,len(xran))))
-        
-    return nearby_pairs
-#np.vstack((grid_pairs.copy(),nearby_pairs.copy()))
-
-### trying different 'points' functions in order to avoid recursion ###
-#######END#########
-
-def points5(xran,yran,spacing,b,recurse_depth=3):
+def points5(xran,yran,spacing,b,recurse_depth=3,caustics=False):
     '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
     x = xran[0:-1]
     y = yran[0:-1]
@@ -176,17 +98,21 @@ def points5(xran,yran,spacing,b,recurse_depth=3):
 
     temp_cells = cells.copy()
     cells_sel = points5_wrapper(temp_cells,b)
-    output_pairs = grid_pairs.copy()
+    if not caustics:
+        output_pairs = grid_pairs.copy()
 
     for i in range(recurse_depth-1):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
         cells_sel = points5_wrapper(temp_cells,b)
-        output_pairs = np.vstack((output_pairs,np.reshape(cells_sel,(-1,2))))
+        if not caustics:
+            output_pairs = np.vstack((output_pairs,np.reshape(cells_sel,(-1,2))))
 
-    return output_pairs
+    if not caustics:
+        return output_pairs
+    else:
+        return cells_sel
     
     
-
 def points5_wrapper(cells,b):
     '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
     cells_mag = mag_of_cells(cells,b)
@@ -239,14 +165,6 @@ def generate_ranges(critargs,carargs,polargs):
     funy1 = f(funx,b)
     funy2 = nf(funx,b) 
 
-    ## critical curves
-    critx = np.hstack((funx,funx[::-1])) 
-    crity = np.hstack((funy1,funy2[::-1])) #here and above the second pairs are put in reverse order so the line connecting the points makes a nice circe rather than crossing the origin to start from the other side
-
-    ## caustics?
-
-    caustics = carmapping(critx,crity,b)
-
     # initial cartesian grid, coarse,
     lowerend, upperend, spacing = carargs
     
@@ -262,9 +180,17 @@ def generate_ranges(critargs,carargs,polargs):
     ## the rs and thetas formed from a cartesian product. Used for vector operations.
     rs = np.tile(r,len(theta))
     thetas = np.repeat(theta,len(r))
+    
+    ## critical curves
+#    critx = np.hstack((funx,funx[::-1])) 
+#    crity = np.hstack((funy1,funy2[::-1])) #here and above the second pairs are put in reverse order so the line connecting the points makes a nice circe rather than crossing the origin to start from the other sid
+    critx, crity = np.transpose(points5(x,y,spacing,b,recurse_depth=8,caustics=True))
 
-    return [ [critx, crity], caustics, [x,y], [r, theta], [rs, thetas] ]
+    ## caustics?
 
+    causticsx,causticsy = np.transpose(carmapping(critx,crity,b))
+
+    return [ [critx, crity], [causticsx, causticsy], [x,y], [r, theta], [rs, thetas] ]
 
 
 def transformations(car_ranges, pol_ranges, spacing, b):
@@ -302,15 +228,21 @@ def find_source(stack, transformed, simplices, image_loc,b):
 
     return [sourcepos, realpos]
 
-def plot_graphs(critx,crity,caustics,stack,transformed,simplices,sourcepos,realpos,image,lowerend,upperend):
+def plot_graphs(critx,crity,
+                causticsx,causticsy,
+                stack,transformed,
+                simplices,
+                sourcepos,realpos,image,
+                lowerend,upperend):
+
     plt.subplot(1,2,1) # image plane
     plt.title('Image Plane')
     plt.axis([lowerend,upperend,lowerend,upperend])
     plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
     
-    plt.plot(critx,crity,zorder=2) # plot of critical curve(s)
+    plt.scatter(critx,crity, color='red', s=1, zorder=2) # plot of critical curve(s)
 
-    plt.triplot(stack[:,0],stack[:,1], simplices,zorder=1) # plot of the Delaunay Triangulization
+    plt.triplot(stack[:,0],stack[:,1], simplices, color='blue', zorder=1) # plot of the Delaunay Triangulization
 
     plt.scatter(*zip(*sourcepos), marker='*', color='black',s=100, zorder=2) # plot of the (approximate/centroid) positions of the image
     plt.scatter(*zip(*realpos), marker='*', color='purple', s=100, zorder=2)
@@ -319,11 +251,11 @@ def plot_graphs(critx,crity,caustics,stack,transformed,simplices,sourcepos,realp
     plt.title('Source Plane')
     plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
 
-    plt.triplot(transformed[:,0],transformed[:,1], simplices, zorder=1) # plot of the transformed Delaunay Triangulization
+    plt.triplot(transformed[:,0],transformed[:,1], simplices, color='blue', zorder=1) # plot of the transformed Delaunay Triangulization
 
     plt.scatter(*zip(image), marker='*', color='red', s= 200, zorder=2 ) # plot of (observed) image position
 
-    plt.plot(caustics[:,0],caustics[:,1], color ='green', zorder=2) # plot of caustics?
+    plt.scatter(causticsx, causticsy, color ='green', s=1, zorder=2) # plot of caustics
     plt.show()
 
 
@@ -334,7 +266,7 @@ def run(critargs,carargs,polargs,show_plot=True,image=np.random.uniform(-1,1,2))
     
     args = generate_ranges(critargs,carargs,polargs)
     critx, crity = args[0]
-    caustics = args[1]
+    causticsx,causticsy = args[1]
     x,y = args[2]
     r,theta = args[3]
     rs,thetas = args[4]
@@ -344,7 +276,10 @@ def run(critargs,carargs,polargs,show_plot=True,image=np.random.uniform(-1,1,2))
     sourcepos, realpos = find_source(stack, transformed, dpoints.simplices.copy(), image, b)
 
     if show_plot:
-        plot_graphs(critx,crity,caustics,stack,transformed,dpoints.simplices.copy(),sourcepos,realpos,image,lowerend,upperend)
+        plot_graphs(critx,crity,causticsx,causticsy,stack,transformed,dpoints.simplices.copy(),sourcepos,realpos,image,lowerend,upperend)
+
+
+#### sample parameter run ####
 
 pcritargs = [1.,200] #critical curve radius, number of points on critical curve function
 pcarargs = [-2.5,2.5,0.5] # lower bound, upper bound, initial spacing (all 3 quantities apply the same to x and y axes)
