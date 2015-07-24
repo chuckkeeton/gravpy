@@ -3,26 +3,10 @@ import numpy as np
 #modelargs: (major) radius, x-center position, y-center position, ellipticity, ellipticity angle, core radius
 
 def phiarray(xi,yi,modelargs):
-    np.place(modelargs[-1],modelargs[-1]==0,0.0001) # replaces core radius (s)==0 -> 0.0001, fixes /0 situations in pot calculation. 
+    np.place(modelargs[-1],modelargs[-1]==0,0.0001) # replaces core radius (s)==0 -> 0.0001, fixes /0 situations in potential calculation. 
     b,x0,y0,e,te,s  = modelargs
-
-    # following is some filtering and ordering to seperate elliptical cases from spherical cases and then recombine resulting phiarrays back into the same order they came in argument-wise
-    #TODO: make wrapper for generalizing this block of code, expect this kind of condition break to be useful in additional model routines...
-    n = np.max(xi.shape)
-    empty_shape = np.zeros((6,n,0),dtype='float64')
-
-    where_e0     = np.flatnonzero(e==0) 
-    where_e_not0 = np.flatnonzero(e!=0) 
     
-    sphericalargs = np.take(modelargs,where_e0,axis=2)
-    spheremodels = spherical(xi[:,where_e0],yi[:,where_e0],sphericalargs) if sphericalargs.size!= 0 else empty_shape
-    ellipticalargs = np.take(modelargs,where_e_not0,axis=2)
-    ellipticalmodels = elliptical(xi[:,where_e_not0],yi[:,where_e_not0],ellipticalargs) if ellipticalargs.size!=0 else empty_shape
-         
-    allmodels = np.concatenate((spheremodels,ellipticalmodels),axis=2)
-    sorted_indices = np.argsort(np.hstack((where_e0,where_e_not0)))
-    sorted_models = np.take(allmodels,sorted_indices,axis=2)
-
+    sorted_models = core.cond_break(xi,yi,[e==0,e!=0],[sie.spherical,sie.elliptical],modelargs)
     return sorted_models
     
         

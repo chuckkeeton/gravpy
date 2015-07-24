@@ -1,16 +1,15 @@
 #!/usr/bin/python
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
-import random
 
 import trinterior as trint
+import plots
 
 # lens model modules: 'models_list[modelargs[0]]' gives us the module to use
-import sis
-models_list = {'SIS':sis}   
+import sie
+models_list = {'SIE':sie}   
 
 def process_modelargs(modelargs):
     '''Groups same-model mass components into 2D arrays for quicker(?) vectorized computation.'''
@@ -23,7 +22,7 @@ def process_modelargs(modelargs):
     
     ind = [np.argwhere(invInd==i).flatten() for i in range(num_models)]
     result = [ [sortedmodels[i], np.array(map(params.__getitem__,ind[i])).T.reshape((-1,1,len(ind[i])))] 
-        for i in range(num_models)]
+        for i in range(num_models)] #hairy... but it works....
 
     return result
 
@@ -102,9 +101,30 @@ def potdefmag(x,y,modelargs):
         newarr = (pot,newphix,newphiy,newphixx,newphiyy,newphixy)
 
         phi2Darray.append(np.sum(newarr,axis=2)) #add up contributions from different parameters (from same model) into one result phiarray. Equivalent to a final sum over all different models simliar to the one after this for-loop, but this sum makes appending easier (due to dimensionality issues).
-
-       
+        
     return np.sum(phi2Darray,axis=0)
+
+def cond_break(x,y,conds,function_calls,modelargs):
+    n = np.max(x.shape)
+    empty_shape = np.zeros((6,n,0),dtype='float64')
+
+    allmodels = empty_shape.copy()
+
+    zipped = np.dstack(conds,function_calls)
+
+    for cond,function in zipped:
+        temp_ind = np.flatnonzero(cond) 
+        
+        temp_args = np.take(modelargs,temp_ind,axis=2)
+        temp_models = function(x[:,temp_args],y[:,temp_args],temp_args) if temp_args.size!= 0 else empty_shape
+    
+        allmodels = np.concatenate((allmodels,temp_models),axis=2)
+
+    sorted_indices = np.argsort(conds)
+    sorted_models = np.take(allmodels,sorted_indices,axis=2)
+
+    return sorted_models
+       
 
 def mag_of_cells(cells,modelargs):
     '''Takes a list of cells and returns the magnification values for each point in the cells. Retains shape and order of the original list of cells.'''
@@ -112,6 +132,7 @@ def mag_of_cells(cells,modelargs):
     cells_x = cells_x_y[:,0]
     cells_y = cells_x_y[:,1]
 
+    # possible area to optimize later, here, phiarray calculates on same values twice.
     mag_x_y = relation(cells_x,cells_y,modelargs)
     
     return np.reshape(mag_x_y,(-1,4))
@@ -171,6 +192,7 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False):
     for i in range(recurse_depth):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
         cells_sel = points5_wrapper(temp_cells,modelargs)
+        
         if not caustics_mode:
             output_pairs = np.vstack( (output_pairs,cells_sel.reshape((-1,2))) )
 
@@ -181,7 +203,7 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False):
 
 
 def generate_ranges(carargs,polargs,modelargs,caustics=True):
-    '''Generates the sequences used for the other gridding functions.
+    '''Generates the sequences used for the other core & gridding functions.
     Returns an array containing:
     [ [x,y], [r,theta], [critx, crity], [causticsx, causticsy]]
     where critx,crity refers to the x and y values for the critical curves,
@@ -198,7 +220,6 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True):
     y = np.arange(lowerend,upperend+spacing,spacing)
 
     #supplemental polar grid(s)
-    
     polargrids = np.reshape([],(0,2))
     
     for grid in polargs:
@@ -217,13 +238,14 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True):
 
         polargrids = np.vstack((polargrids,shiftedpairs))
     
+    #caustics and critical curves, if caustics == True
     if caustics:
         ## critical curves
         critx, crity = np.transpose(points5(x,y,spacing,modelargs,recurse_depth=8,caustics_mode=True))
         ## caustics
         causticsx,causticsy = np.transpose(carmapping(critx,crity,modelargs))
         return [ [x,y], polargrids, [critx, crity], [causticsx, causticsy] ]
-
+    #otherwise just return x,y grid and polar grids
     else:
         return  [[x,y], polargrids]
 
@@ -260,40 +282,6 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
     return realpos
 
 
-def plot_graphs(stack,transformed,
-                simplices,
-                realpos,image,
-                lowerend,upperend,
-                caustics=False):
-    '''Uses 'matplotlib' library to view the image and source plane, the triangulization mesh, critical curves, caustics, image and source position.'''
-    
-    if caustics:
-        [critx,crity],[causticsx,causticsy] = caustics
-
-    plt.subplot(1,2,1) # image plane
-    plt.title('Image Plane')
-    plt.axis([lowerend,upperend,lowerend,upperend])
-    plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
-    
-    if caustics:
-        plt.scatter(critx,crity, color='red', s=1, zorder=2) # plot of critical curve(s)
-
-    plt.triplot(stack[:,0],stack[:,1], simplices, color='blue', zorder=1) # plot of the Delaunay Triangulization
-    
-    plt.scatter(*zip(*realpos), marker='*', color='green', s=100, zorder=2)
-
-    plt.subplot(1,2,2) # source plane
-    plt.title('Source Plane')
-    plt.axis([lowerend,upperend,lowerend,upperend])
-    plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
-
-    plt.triplot(transformed[:,0],transformed[:,1], simplices, color='blue', zorder=1) # plot of the transformed Delaunay Triangulization
-
-    plt.scatter(*zip(image), marker='*', color='red', s= 100, zorder=2 ) # plot of (observed) image position
-    if caustics:
-        plt.scatter(causticsx, causticsy, color ='green', s=1, zorder=2) # plot of caustics
-    
-    plt.show()
     
 
 
@@ -318,7 +306,7 @@ def run(carargs,polargs,modelargs,
     realpos = find_source(stack, transformed, dpoints.simplices, image, bettermodelargs)
 
     if show_plot:
-        plot_graphs(
+        plots.source_image_planes(
             stack,transformed,dpoints.simplices,
             realpos,image,
             lowerend,upperend,
