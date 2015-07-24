@@ -1,17 +1,18 @@
 import numpy as np
 
-#modelargs: 'SIS', center position (coordinate pair), (major) radius, ellipticity, core radius
+#modelargs: (major) radius, x-center position, y-center position, ellipticity, ellipticity angle, core radius
 
 def phiarray(xi,yi,modelargs):
     np.place(modelargs[-1],modelargs[-1]==0,0.0001) # replaces core radius (s)==0 -> 0.0001, fixes /0 situations in pot calculation. 
     b,x0,y0,e,te,s  = modelargs
 
     # following is some filtering and ordering to seperate elliptical cases from spherical cases and then recombine resulting phiarrays back into the same order they came in argument-wise
+    #TODO: make wrapper for generalizing this block of code, expect this kind of condition break to be useful in additional model routines...
     n = np.max(xi.shape)
     empty_shape = np.zeros((6,n,0),dtype='float64')
 
-    where_e0     = np.argwhere((e==0).ravel()).ravel()
-    where_e_not0 = np.argwhere((e!=0).ravel()).ravel()
+    where_e0     = np.flatnonzero(e==0) 
+    where_e_not0 = np.flatnonzero(e!=0) 
     
     sphericalargs = np.take(modelargs,where_e0,axis=2)
     spheremodels = spherical(xi[:,where_e0],yi[:,where_e0],sphericalargs) if sphericalargs.size!= 0 else empty_shape
@@ -36,16 +37,17 @@ def elliptical(x,y,modelargs):
     om  = 1.0-q2
     rt  = np.sqrt(om)
     psi = np.sqrt(q2*(s2+x2)+y2)
+    psis= psi + s
 
-    phix = b*q/rt *np.arctan(rt*x/(psi+s))
+    phix = b*q/rt *np.arctan(rt*x/psis)
     phiy = b*q/rt *np.arctanh(rt*y/(psi+s*q2))
 
-    invDenom = 1/(psi*(om*x2+(psi+s)**2))
-    phixx = b*q*(psi*(psi+s)-q2*x2)*invDenom
-    phiyy = b*q*(x2+s*(psi+s))*invDenom
+    invDenom = 1/(psi*(om*x2+psis**2))
+    phixx = b*q*(psi*psis-q2*x2)*invDenom
+    phiyy = b*q*(x2+s*psis)*invDenom
     phixy = -b*q*x*y*invDenom
 
-    pot = b*q*s*(-0.5*np.log((psi+s)**2+om*x2) + np.log(s*(1.0+q)) ) + x*phix+y*phiy
+    pot = b*q*s*(-0.5*np.log(psis**2+om*x2) + np.log(s*(1.0+q)) ) + x*phix+y*phiy
 
 
     return np.array((pot,phix,phiy,phixx,phiyy,phixy))

@@ -13,11 +13,11 @@ import sis
 models_list = {'SIS':sis}   
 
 def process_modelargs(modelargs):
+    '''Groups same-model mass components into 2D arrays for quicker(?) vectorized computation.'''
+
     models = [mass_component[0] for mass_component in modelargs]
     params = [mass_component[1:] for mass_component in modelargs]
 
-    modelset = list(set(models))
-    
     sortedmodels, invInd = np.unique(models,return_inverse=True)
     num_models = len(sortedmodels)
     
@@ -43,26 +43,23 @@ def polartocar(r,th):
     r  = np.array(r)
     th = np.array(th)
             
-    return np.transpose([r*np.cos(th),r*np.sin(th)])
+    return np.transpose(r*[np.cos(th),np.sin(th)])
 
 def mapping(v,u,modelargs):
-    '''Function used for root finding. Not intended for vectorized inputs. Returns the deflection vector along with the inverse-magnification matrix (aka the Jacobian).'''
+    '''Function used for root finding. u is image (non-variable), and v is the true position in the image plane (variable). Not intended for vectorized inputs. Returns the deflection vector along with the inverse-magnification matrix (aka the Jacobian).'''
 
     w,z = u #image
     x,y = v #actual position we want to find
 
-    phiarr = potdefmag(x,y,modelargs).flatten()
+    phiarr = potdefmag(x,y,modelargs).ravel()
     phix,phiy,phixx,phiyy,phixy = phiarr[1:6]
 
     return [[x-w,y-z] - np.array((phix,phiy)),
             [[1-phixx, -phixy],[-phixy,1-phiyy]]]
 
-
-
 def carmapping(x,y,modelargs):
     '''mapping of cartesian coordinates from image to source plane'''
     
-
     phiarr = potdefmag(x,y,modelargs)
     phix,phiy = phiarr[1:3]
     
@@ -72,22 +69,23 @@ def distance(x,y,modelargs):
     '''returns the distance between the critical curve and the point '''
 
     phiarr = potdefmag(x,y,modelargs)
-    
     phixx,phiyy,phixy = phiarr[3:6]
     
     return (1-phixx)*(1-phiyy)-phixy**2
 
 def potdefmag(x,y,modelargs):
+    '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
     phi2Darray = []
-    x = x.reshape((-1,1))
-    y = y.reshape((-1,1))
+    x = x.reshape((-1,1)) #broadcasting-ready
+    y = y.reshape((-1,1)) #--^
 
     for mass_component in modelargs:
         model = models_list[mass_component[0]]
         args = mass_component[1]
         x0,y0 = args[1:3]
         te = args[4]
-
+        
+        #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate. 
         c = np.cos(te*np.pi/180);c2=c**2
         s = np.sin(te*np.pi/180);s2=s**2;sc=s*c
         xp = -s*(x-x0) + c*(y-y0)
@@ -95,14 +93,15 @@ def potdefmag(x,y,modelargs):
 
         pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args)
 
+        # Inverse transformation back into desired coordinates. 
         newphix = -s*px-c*py
         newphiy = c*px-s*py 
         newphixx= s2*pxx+c2*pyy+2*sc*pxy
         newphiyy= c2*pxx+s2*pyy-2*sc*pxy
-        newphixy= -sc*(pxx-pyy)+(s2-c2)*pxy
+        newphixy= sc*(pyy-pxx)+(s2-c2)*pxy
         newarr = (pot,newphix,newphiy,newphixx,newphiyy,newphixy)
 
-        phi2Darray.append(np.sum(newarr,axis=2))
+        phi2Darray.append(np.sum(newarr,axis=2)) #add up contributions from different parameters (from same model) into one result phiarray. Equivalent to a final sum over all different models simliar to the one after this for-loop, but this sum makes appending easier (due to dimensionality issues).
 
        
     return np.sum(phi2Darray,axis=0)
@@ -173,23 +172,24 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
         cells_sel = points5_wrapper(temp_cells,modelargs)
         if not caustics_mode:
-            output_pairs = np.vstack((output_pairs,np.reshape(cells_sel,(-1,2))))
+            output_pairs = np.vstack( (output_pairs,cells_sel.reshape((-1,2))) )
 
     if not caustics_mode:
         return output_pairs
     else:
-        return np.mean(cells_sel,axis=1)
+        return np.mean(cells_sel,axis=1) # don't want the vertices of each cell; just the (center) of each cell
 
 
 def generate_ranges(carargs,polargs,modelargs,caustics=True):
     '''Generates the sequences used for the other gridding functions.
     Returns an array containing:
-    [ [critx, crity], [causticsx, causticsy], [x,y], [r, theta], [rs, thetas] ]
+    [ [x,y], [r,theta], [critx, crity], [causticsx, causticsy]]
     where critx,crity refers to the x and y values for the critical curves,
     causticsx, causticsy refers to the x and y values for the caustics,
     x,y are the cartesian ranges for the originial mesh-grid,
-    r,theta are the polar ranges for the supplementary polar grid,
-    rs,thetas are the r and theta values resulting from the cartesian product of the two ranges 'r' and 'theta' '''
+    r,theta are the cartesian x and y values for the supplementary polar grid(s).
+    If caustics is set to False, then [critx, crity] and [causticsx, causticsy] are not returned-- Instead just [x,y]  and [r,theta] are returned.
+    '''
         
     # initial cartesian grid, coarse,
     lowerend, upperend, spacing = carargs
@@ -197,7 +197,7 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True):
     x = np.arange(lowerend,upperend+spacing,spacing)
     y = np.arange(lowerend,upperend+spacing,spacing)
 
-    #intial polar grid
+    #supplemental polar grid(s)
     
     polargrids = np.reshape([],(0,2))
     
@@ -216,8 +216,6 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True):
         shiftedpairs = polartocar(temprs,tempthetas) + center
 
         polargrids = np.vstack((polargrids,shiftedpairs))
-
-
     
     if caustics:
         ## critical curves
@@ -233,15 +231,8 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True):
 def transformations(car_ranges, pol_ranges, spacing, modelargs, recurse_depth=3):
     '''Generates the subgridding points (more points around the critical curve), the transformations from image plane to source plane, and the Delaunay Triangulization object for plotting.'''
     x,y = car_ranges
-
-    
-    polstack = [] # stack for holding the polar points #needed if we subgrid on polar grids
-    carstack = [] # stack for holding the cartesian points
-    stack = []
       
     carstack = points5(x,y,spacing,modelargs,recurse_depth=recurse_depth)  #generate subgrid on cartesian grid
-    stack = np.array(stack)
-    carstack = np.array(carstack) 
     polstack = np.array(pol_ranges)
     stack = np.concatenate((carstack,polstack),axis=0) #combine list of cartesian and polar pairs
     transformed = np.array(carmapping(stack[:,0],stack[:,1],modelargs)) #transform pairs from image to source plane
@@ -255,13 +246,13 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
     '''Employs the algorithm in the 'trinterior' module to find the positions of the image in the image plane. Returns the coordinate pair(s) in an array.'''
     
 
-    lenstri = transformed[simplices.copy()] #triangles on the source plane
-    imagetri= stack[simplices.copy()] #triangles on the image plane
+    lenstri = np.take(transformed,simplices,axis=0) #triangles on the source plane
+    imagetri= np.take(stack,simplices,axis=0) #triangles on the image plane
 
-    indices = trint.find2(image_loc,lenstri.copy()) #list of which triangles contain point on source plane
+    indices = trint.find2(image_loc,lenstri) #list of which triangles contain point on source plane
 
     sourcetri = imagetri[indices] 
-    sourcepos = np.sum(sourcetri.copy(),axis=1)/3.0 #list of the centroid coordinates for the triangles which contain the point 'image'
+    sourcepos = np.sum(sourcetri,axis=1)/3.0 #list of the centroid coordinates for the triangles which contain the point 'image'
     realpos = np.array(
         [(op.root(mapping,v,args=(image_loc,modelargs),jac=True)).x 
          for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
@@ -274,7 +265,7 @@ def plot_graphs(stack,transformed,
                 realpos,image,
                 lowerend,upperend,
                 caustics=False):
-    '''Uses 'matplotlib' to view the image and source plane, the triangulization mesh, critical curves, caustics, image and source position.'''
+    '''Uses 'matplotlib' library to view the image and source plane, the triangulization mesh, critical curves, caustics, image and source position.'''
     
     if caustics:
         [critx,crity],[causticsx,causticsy] = caustics
@@ -324,11 +315,11 @@ def run(carargs,polargs,modelargs,
 
     stack, transformed, dpoints = transformations((x,y),polargrids,spacing, bettermodelargs, recurse_depth=recurse_depth)
     
-    realpos = find_source(stack, transformed, dpoints.simplices.copy(), image, bettermodelargs)
+    realpos = find_source(stack, transformed, dpoints.simplices, image, bettermodelargs)
 
     if show_plot:
         plot_graphs(
-            stack,transformed,dpoints.simplices.copy(),
+            stack,transformed,dpoints.simplices,
             realpos,image,
             lowerend,upperend,
             caustics=[[critx,crity],[causticsx,causticsy]] if caustics else False)
