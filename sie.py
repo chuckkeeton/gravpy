@@ -1,12 +1,12 @@
 import numpy as np
-
+import core
 #modelargs: (major) radius, x-center position, y-center position, ellipticity, ellipticity angle, core radius
 
 def phiarray(xi,yi,modelargs):
     np.place(modelargs[-1],modelargs[-1]==0,0.0001) # replaces core radius (s)==0 -> 0.0001, fixes /0 situations in potential calculation. 
     b,x0,y0,e,te,s  = modelargs
     
-    sorted_models = core.cond_break(xi,yi,[e==0,e!=0],[sie.spherical,sie.elliptical],modelargs)
+    sorted_models = core.cond_break(xi,yi,modelargs,[e==0,e!=0],[spherical,elliptical])
     return sorted_models
     
         

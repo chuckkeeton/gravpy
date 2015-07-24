@@ -104,25 +104,33 @@ def potdefmag(x,y,modelargs):
         
     return np.sum(phi2Darray,axis=0)
 
-def cond_break(x,y,conds,function_calls,modelargs):
-    n = np.max(x.shape)
+def cond_break(x,y,modelargs,conds,function_calls):
+    '''This code is essentially some filtering and ordering to seperate cases based on conditions and then recombine resulting phiarrays back into the same order they came in argument-wise. For example, in the 'sie' module, there is a split in calculations for elliptical and spherical cases. This wrapper will split the incoming arguments into their respective function calls and merge the outputs back together in the order they came in.'''
+
+    n = max(x.shape)
+    
     empty_shape = np.zeros((6,n,0),dtype='float64')
 
-    allmodels = empty_shape.copy()
+    allmodels = []
+    allinds = [] 
 
-    zipped = np.dstack(conds,function_calls)
+    zipped = zip(conds,function_calls)
 
     for cond,function in zipped:
         temp_ind = np.flatnonzero(cond) 
         
         temp_args = np.take(modelargs,temp_ind,axis=2)
-        temp_models = function(x[:,temp_args],y[:,temp_args],temp_args) if temp_args.size!= 0 else empty_shape
+        temp_x,temp_y = x[:,temp_ind],y[:,temp_ind]#np.take(x,temp_ind,axis=1),np.take(y,temp_ind,axis=1)
+        temp_models = function(temp_x,temp_y,temp_args) if temp_args.size!= 0 else empty_shape
+                
+        allinds.append(temp_ind)
+        allmodels.append(temp_models)
+        
+    npallinds = np.concatenate(allinds,axis=1)
+    npallmodels = np.concatenate(allmodels,axis=2)
+    sorted_indices = np.argsort(npallinds)
+    sorted_models = np.take(npallmodels,sorted_indices,axis=2)
     
-        allmodels = np.concatenate((allmodels,temp_models),axis=2)
-
-    sorted_indices = np.argsort(conds)
-    sorted_models = np.take(allmodels,sorted_indices,axis=2)
-
     return sorted_models
        
 
@@ -281,10 +289,6 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
 
     return realpos
 
-
-    
-
-
 def run(carargs,polargs,modelargs,
         show_plot=True,caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3):
     '''The master command that wraps and executes all the commands to run a gridding example. Use this function (excusively) when using this module.'''
@@ -314,4 +318,4 @@ def run(carargs,polargs,modelargs,
 
 
 
-# cProfile.run('run([-2.5,2.5,0.5], [0.3,0.03,42], [\'SIS\',1.0],show_plot=False)')
+
