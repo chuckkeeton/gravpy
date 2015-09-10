@@ -3,15 +3,15 @@ import core
 #modelargs: (major) radius, x-center position, y-center position, ellipticity, ellipticity angle, core radius
 
 def phiarray(xi,yi,modelargs):
-    np.place(modelargs[-1],modelargs[-1]==0,0.0001) # replaces core radius (s)==0 -> 0.0001, fixes /0 situations in potential calculation. 
-    b,x0,y0,e,te,s  = modelargs
+    np.place(modelargs[-1],modelargs[-1]==0,1e-4) # replaces core radius (s)==0 -> 1e-4, fixes /0 situations in potential calculation. 
+    b,x0,y0,e,te,s  = modelargs[:6]
     
     sorted_models = core.cond_break(xi,yi,modelargs,[e==0,e!=0],[spherical,elliptical])
     return sorted_models
     
         
 def elliptical(x,y,modelargs):
-    b,x0,y0,e,te,s  = modelargs
+    b,x0,y0,e,te,s  = modelargs[:6]
     
     x2  = x**2
     y2  = y**2
@@ -33,18 +33,16 @@ def elliptical(x,y,modelargs):
 
     pot = b*q*s*(-0.5*np.log(psis**2+om*x2) + np.log(s*(1.0+q)) ) + x*phix+y*phiy
 
-
     return np.array((pot,phix,phiy,phixx,phiyy,phixy))
 
 def spherical(x,y,modelargs):
-    b,x0,y0,e,te,s  = modelargs
+    b,x0,y0,e,te,s  = modelargs[:6]
 
     r = np.sqrt(x**2+y**2)
     rad = np.sqrt(r**2+s**2)
     sprad = s + rad
     invDenom = 1/(rad*sprad**2)
     
-
     pot = b * (rad-s*(1+np.log(sprad/(2*s))))
     phix = b * x / sprad
     phiy = b * y / sprad

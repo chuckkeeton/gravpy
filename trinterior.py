@@ -72,15 +72,16 @@ def find2(p,triangles):
 ### the following code is for testing purposes ###
 
 
-sampletriangles = np.load("triangles.npy") #load a working example of a list of triangles formed by Delaunay Triangulization, for use in the test function below
-def test():
-    '''a function used to time the 'inside_triangle' algorithm'''
-    find2([0.5,0.5],sampletriangles)
+#sampletriangles = np.load("triangles.npy") #load a working example of a list of triangles formed by Delaunay Triangulization, for use in the test function below
+#def test():
+#    '''a function used to time the 'inside_triangle' algorithm'''
+#    find2([0.5,0.5],sampletriangles)
 
 # run from the command line to time the function:
 ## python -m timeit -v -s'import trinterior' 'trinterior.test()'
 
-# Speedups
+
+#****Speedups****
 # dot products -> determinants in inside_triangle(): 80 msec to 60 msec
 # for loop -> list comprehension in find(): 60 msec to 56 msec
 # find() -> find2() -- full transition to numpy vector operations: 56 msec to 15 msec

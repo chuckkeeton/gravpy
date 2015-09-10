@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import mayavi.mlab as m 
 import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
@@ -8,8 +8,8 @@ import trinterior as trint
 import plots
 
 # lens model modules: 'models_list[modelargs[0]]' gives us the module to use
-import sie
-models_list = {'SIE':sie}   
+import sie, alpha
+models_list = {'SIE':sie,'alpha':alpha}   
 
 def process_modelargs(modelargs):
     '''Groups same-model mass components into 2D arrays for quicker(?) vectorized computation.'''
@@ -65,7 +65,7 @@ def carmapping(x,y,modelargs):
     return np.transpose([x,y] - np.array((phix,phiy)))
 
 def distance(x,y,modelargs):
-    '''returns the distance between the critical curve and the point '''
+    '''returns the magnification of the points '''
 
     phiarr = potdefmag(x,y,modelargs)
     phixx,phiyy,phixy = phiarr[3:6]
@@ -75,8 +75,8 @@ def distance(x,y,modelargs):
 def potdefmag(x,y,modelargs):
     '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
     phi2Darray = []
-    x = x.reshape((-1,1)) #broadcasting-ready
-    y = y.reshape((-1,1)) #--^
+    x = np.expand_dims(x,axis=1) #broadcasting-ready
+    y = np.expand_dims(y,axis=1) #--^
 
     for mass_component in modelargs:
         model = models_list[mass_component[0]]
@@ -93,22 +93,43 @@ def potdefmag(x,y,modelargs):
         pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args)
 
         # Inverse transformation back into desired coordinates. 
-        newphix = -s*px-c*py
-        newphiy = c*px-s*py 
-        newphixx= s2*pxx+c2*pyy+2*sc*pxy
-        newphiyy= c2*pxx+s2*pyy-2*sc*pxy
-        newphixy= sc*(pyy-pxx)+(s2-c2)*pxy
-        newarr = (pot,newphix,newphiy,newphixx,newphiyy,newphixy)
-
-        phi2Darray.append(np.sum(newarr,axis=2)) #add up contributions from different parameters (from same model) into one result phiarray. Equivalent to a final sum over all different models simliar to the one after this for-loop, but this sum makes appending easier (due to dimensionality issues).
+        new_phix = -s*px-c*py
+        new_phiy = c*px-s*py 
+        new_phixx= s2*pxx+c2*pyy+2*sc*pxy
+        new_phiyy= c2*pxx+s2*pyy-2*sc*pxy
+        new_phixy= sc*(pyy-pxx)+(s2-c2)*pxy
+        new_arr  = (pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy)
         
+        
+        phi2Darray.append(np.sum(new_arr,axis=2)) #add up contributions from different parameters (from same model) into one result phiarray. Equivalent to a final sum over all different models simliar to the one after this for-loop, but this sum makes appending easier (due to dimensionality issues - each model will/(most likely) have different number of mass components).
+    
     return np.sum(phi2Darray,axis=0)
 
 def cond_break(x,y,modelargs,conds,function_calls):
+    '''Experimental function that decides whether to vectorize multiple mass components or just iterate over a for loop. Current break is at 10 mass components'''
+    num = x.shape[1]
+    
+    if num<10:
+        return cond_break_for(x,y,modelargs,conds,function_calls)
+    else:
+        return cond_break_vec(x,y,modelargs,conds,function_calls)
+    
+    
+def cond_break_for(x,y,modelargs,conds,function_calls):
+    n = x.shape[1]
+
+    ind = np.nonzero(conds)[1]
+    ordered_funcs = np.array(function_calls)[ind]
+
+    phiarrays = [ordered_funcs[i](x[:,i],y[:,i],modelargs[:,:,i]) for i in range(n)]
+    
+    return np.transpose(phiarrays,[1,2,0])
+    
+    
+def cond_break_vec(x,y,modelargs,conds,function_calls):
     '''This code is essentially some filtering and ordering to seperate cases based on conditions and then recombine resulting phiarrays back into the same order they came in argument-wise. For example, in the 'sie' module, there is a split in calculations for elliptical and spherical cases. This wrapper will split the incoming arguments into their respective function calls and merge the outputs back together in the order they came in.'''
 
-    n = max(x.shape)
-    
+    n = x.shape[0]
     empty_shape = np.zeros((6,n,0),dtype='float64')
 
     allmodels = []
@@ -120,9 +141,9 @@ def cond_break(x,y,modelargs,conds,function_calls):
         temp_ind = np.flatnonzero(cond) 
         
         temp_args = np.take(modelargs,temp_ind,axis=2)
-        temp_x,temp_y = x[:,temp_ind],y[:,temp_ind]#np.take(x,temp_ind,axis=1),np.take(y,temp_ind,axis=1)
+        temp_x,temp_y = np.take(x,temp_ind,axis=1),np.take(y,temp_ind,axis=1)
         temp_models = function(temp_x,temp_y,temp_args) if temp_args.size!= 0 else empty_shape
-                
+        
         allinds.append(temp_ind)
         allmodels.append(temp_models)
         
@@ -193,19 +214,19 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False):
 
     temp_cells = cells.copy()
     cells_sel = points5_wrapper(temp_cells,modelargs)
-
-    if not caustics_mode:
-        output_pairs = grid_pairs.copy()
-
+    
+    output_pairs = []
+    
     for i in range(recurse_depth):
         temp_cells = subdivide_cells(cells_sel,spacing,i+1)
         cells_sel = points5_wrapper(temp_cells,modelargs)
         
         if not caustics_mode:
-            output_pairs = np.vstack( (output_pairs,cells_sel.reshape((-1,2))) )
+            output_pairs.append(cells_sel)
 
     if not caustics_mode:
-        return output_pairs
+        output_pairs = np.vstack(output_pairs).reshape((-1,2))
+        return np.vstack((grid_pairs,output_pairs))
     else:
         return np.mean(cells_sel,axis=1) # don't want the vertices of each cell; just the (center) of each cell
 
@@ -282,7 +303,7 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
     indices = trint.find2(image_loc,lenstri) #list of which triangles contain point on source plane
 
     sourcetri = imagetri[indices] 
-    sourcepos = np.sum(sourcetri,axis=1)/3.0 #list of the centroid coordinates for the triangles which contain the point 'image'
+    sourcepos = np.mean(sourcetri,axis=1) #list of the centroid coordinates for the triangles which contain the point 'image'
     realpos = np.array(
         [(op.root(mapping,v,args=(image_loc,modelargs),jac=True)).x 
          for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
@@ -309,13 +330,20 @@ def run(carargs,polargs,modelargs,
     
     realpos = find_source(stack, transformed, dpoints.simplices, image, bettermodelargs)
 
+    stackx,stacky=np.transpose(stack)
+    tranx,trany = np.transpose(transformed)
+    mag = distance(stackx,stacky,bettermodelargs)
+    
+    
     if show_plot:
         plots.source_image_planes(
             stack,transformed,dpoints.simplices,
             realpos,image,
             lowerend,upperend,
             caustics=[[critx,crity],[causticsx,causticsy]] if caustics else False)
+#        plots.mag_map(tranx,trany,mag,dpoints.simplices)
 
+   
 
 
 
