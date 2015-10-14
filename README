@@ -20,6 +20,6 @@ SciPy
 ---NumPy
 ---matplotlib
 mlab
-pycallgraph (this library can be excluded if you are not interested in seeing runtimes, make sure to comment out the relevant section in `run_timer.py`)
+pycallgraph (this library can be excluded if you are not interested in seeing runtimes, make sure to comment out the relevant lines in `run_timer.py`)
 
 

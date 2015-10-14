@@ -1,5 +1,6 @@
 import numpy as np
 import core
+
 import sie
 
 def phiarray(xi,yi,modelargs):

@@ -7,23 +7,46 @@ import numpy as np
 cimport numpy as np
 from libc.math cimport sqrt,log,atan,atanh
 
+
+def phiarray(xi,yi,modelargs,vec=False):
+    if vec:
+        return phiarray_vec(xi,yi,modelargs)
+    else:
+        return phiarray_for(xi,yi,modelargs)
+
+
+cpdef phiarray_for(np.ndarray[np.float64_t, ndim=1] xi, 
+                   np.ndarray[np.float64_t, ndim=1] yi, 
+                   np.ndarray[np.float64_t, ndim=1] modelargs):
+
+    #xi.shape ~ (n), modelargs.shape ~ (parameter_array_length)
+    #output.shape ~ (6,n)
+    cdef Py_ssize_t xsize = xi.shape[0]
+
+    cdef np.ndarray[np.float64_t, ndim=2] output = np.empty((xsize,6),dtype=np.float64)
+        
+    which_function(xi,yi,modelargs,output,xsize)
+    
+    return np.transpose(output)
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef phiarray(np.ndarray[np.float64_t, ndim=2] xi, 
-             np.ndarray[np.float64_t, ndim=2] yi, 
-             np.ndarray[np.float64_t, ndim=3] modelargs):
+cpdef phiarray_vec(np.ndarray[np.float64_t, ndim=2] xi, 
+                   np.ndarray[np.float64_t, ndim=2] yi, 
+                   np.ndarray[np.float64_t, ndim=3] modelargs):
+
     #xi.shape ~ (n,num_of_mass_components), modelargs.shape ~ (parameter_array_length,1,num_of_mass_components)
     #output.shape ~ (6,n,num_of_mass_components)
     cdef Py_ssize_t xsize = xi.shape[0]
     cdef Py_ssize_t num_masscomp = modelargs.shape[2]
     cdef Py_ssize_t param_len = modelargs.shape[0]
-    
-
+        
+        
     cdef np.ndarray[np.float64_t, ndim=2] new_modelargs = np.squeeze(modelargs,axis=1).T.copy() #shape~ (num_masscomp,param_length)
     cdef np.ndarray[np.float64_t, ndim=2] new_x = xi.T.copy() #(num_of_mass_components,n)
     cdef np.ndarray[np.float64_t, ndim=2] new_y = yi.T.copy() #(num_of_mass_components,n)
     cdef np.ndarray[np.float64_t, ndim=3] output = np.empty((num_masscomp,xsize,6),dtype=np.float64)
-
+        
     cdef unsigned int i
     
     for i in range(num_masscomp):
@@ -31,6 +54,7 @@ cpdef phiarray(np.ndarray[np.float64_t, ndim=2] xi,
             
             
     return np.transpose(output,[2,1,0])
+
     
 
 @cython.boundscheck(False)
@@ -49,7 +73,7 @@ cdef void which_function(double[:] x, double[:] y, double[:] model_line, double[
     #(x,y,model_line)
 
     
-    
+@cython.cdivision(True)    
 cdef void elliptical(double x, double y, double[:] modelargs, double[:] output):
     cdef double b  = modelargs[0]
     cdef double x0 = modelargs[1]
@@ -89,7 +113,7 @@ cdef void elliptical(double x, double y, double[:] modelargs, double[:] output):
 
 
 
-
+@cython.cdivision(True)    
 cdef void spherical(double x, double y, double[:] modelargs, double[:] output):
     cdef double b  = modelargs[0]
     cdef double x0 = modelargs[1]
