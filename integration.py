@@ -16,7 +16,7 @@ def kappa(e):
     alpha = 1.0
     b = 2.0
     s = 0.01
-    return (0.5 * b**(2 - alpha)) / ((s**2 + e**2)**(1 - (alpha / 2.0)))
+    return (0.5 * b**(2 - alpha)) / ((s**2 + e)**(1 - (alpha / 2.0)))
 
 def xi_squared(u, x, y, q):
     return u * (x**2 + (y**2 / (1.0 - ((1.0  - q**2) * u))))
