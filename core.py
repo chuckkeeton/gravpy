@@ -67,6 +67,29 @@ def magnification(x,y,modelargs,vec=False):
     
     return (1-phixx)*(1-phiyy)-phixy**2
 
+def ellipticity_calculation(x,y,mass_component,vec=False):
+    model = models_list[mass_component[0]]
+    args = mass_component[1] if vec else np.array(mass_component[1:])
+    x0,y0 = args[1:3]
+    te = args[4]
+    
+    #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate. 
+    c = np.cos(te*np.pi/180);c2=c*c
+    s = np.sin(te*np.pi/180);s2=s*s;sc=s*c
+    xp = -s*(x-x0) + c*(y-y0)
+    yp = -c*(x-x0) - s*(y-y0)
+
+    pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=vec)
+
+    # Inverse transformation back into desired coordinates. 
+    new_phix = -s*px-c*py
+    new_phiy = c*px-s*py 
+    new_phixx= s2*pxx+c2*pyy+2*sc*pxy
+    new_phiyy= c2*pxx+s2*pyy-2*sc*pxy
+    new_phixy= sc*(pyy-pxx)+(s2-c2)*pxy
+
+    return  np.array((pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy))
+
 def potdefmag(xi,yi,modelargs,vec=False):
     '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
     phi2Darray = []
@@ -78,35 +101,17 @@ def potdefmag(xi,yi,modelargs,vec=False):
 
     for mass_component in modelargs:
         
-        model = models_list[mass_component[0]]
-        args = mass_component[1] if vec else np.array(mass_component[1:])
-        print args
-        x0,y0 = args[1:3]
-        te = args[4]
-        
-        #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate. 
-        c = np.cos(te*np.pi/180);c2=c*c
-        s = np.sin(te*np.pi/180);s2=s*s;sc=s*c
-        xp = -s*(x-x0) + c*(y-y0)
-        yp = -c*(x-x0) - s*(y-y0)
+        phiarray = ellipticity_calculation(x,y,mass_component,vec=vec)
 
-        pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=vec)
-
-        # Inverse transformation back into desired coordinates. 
-        new_phix = -s*px-c*py
-        new_phiy = c*px-s*py 
-        new_phixx= s2*pxx+c2*pyy+2*sc*pxy
-        new_phiyy= c2*pxx+s2*pyy-2*sc*pxy
-        new_phixy= sc*(pyy-pxx)+(s2-c2)*pxy
-        new_arr  = (pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy)
-        
         if vec:
-            #phi2Darray.append(np.sum(new_arr,axis=2)) #add up contributions from different parameters (from same model) into one result phiarray. Equivalent to a final sum over all different models simliar to the one after this for-loop, but this sum makes appending easier (due to dimensionality issues - each model will/(most likely) have different number of mass components).
-            phi2Darray.include(new_arr)
+            phi2Darray.extend(phiarray.transpose([2,0,1]))
         else:
-            phi2Darray.append(new_arr)
+            phi2Darray.append(phiarray)
             
+    
     return np.sum(phi2Darray,axis=0)
+    
+    
 
 def cond_break(x,y,modelargs,conds,function_calls,break_num=10):
     '''Experimental function that decides whether to vectorize multiple mass components or just iterate over a for loop. Current break is at 10 mass components'''
@@ -122,7 +127,7 @@ def cond_break_for(x,y,modelargs,conds,function_calls):
     n = x.shape[1]
 
     ind = np.nonzero(conds)[1]
-    reordered_funcs = np.array(function_calls)[ind]
+    ordered_funcs = np.array(function_calls)[ind]
 
     phiarrays = [ordered_funcs[i](x[:,i],y[:,i],modelargs[:,:,i]) for i in range(n)]
     
@@ -275,7 +280,7 @@ def generate_ranges(carargs,polargs,modelargs,caustics=True,vec=False):
         ## critical curves
         critx, crity = np.transpose(points5(x,y,spacing,modelargs,recurse_depth=8,caustics_mode=True,vec=vec))
         ## caustics
-        causticsx,causticsy = np.transpose(carmapping(critx,crity,modelargs))
+        causticsx,causticsy = np.transpose(carmapping(critx,crity,modelargs,vec=vec))
         return [ [x,y], polargrids, [critx, crity], [causticsx, causticsy] ]
     #otherwise just return x,y grid and polar grids
     else:
@@ -308,7 +313,7 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
     sourcetri = imagetri[indices] 
     sourcepos = np.mean(sourcetri,axis=1) #list of the centroid coordinates for the triangles which contain the point 'image'
     realpos = np.array(
-        [(op.root(mapping,v,args=(image_loc,modelargs),jac=True)).x
+        [(op.root(mapping,v,args=(image_loc,modelargs),jac=True,tol=1e-4)).x
          for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
 
     return realpos
@@ -321,7 +326,7 @@ def run(carargs,polargs,modelargs,
     
     tempmodelargs = process_modelargs(modelargs) if vec else modelargs
     
-    args = generate_ranges(carargs,polargs,tempmodelargs,caustics=caustics)
+    args = generate_ranges(carargs,polargs,tempmodelargs,caustics=caustics,vec=vec)
     
     x,y = args[0]
     polargrids = args[1]
