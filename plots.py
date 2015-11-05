@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import mayavi.mlab as m
+
 import numpy as np
 
 def source_image_planes(stack,transformed,
@@ -40,6 +40,7 @@ def source_image_planes(stack,transformed,
 
 
 def mag_map(x,y,mag,simplices):
+    import mayavi.mlab as m
     cutoff_log = -2
     scaled_mag = np.log10(mag) #so invalid values aren't raised, shouldn't affect visulization
 #    scaled_mag[np.isnan(scaled_mag)] = cutoff_log

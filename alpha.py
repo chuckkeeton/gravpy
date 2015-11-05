@@ -26,9 +26,9 @@ def plummer(x,y,modelargs):
     q2 = q*q
     om = 1.0-q2
     rt = np.sqrt(om)
-    front = b**3 * q/s
+    front = b*b*b * q/s
     psi = np.sqrt(q2*(s2+x2)+y2)
-    psi2 = psi**2
+    psi2 = psi*psi
     psi3 = psi2*psi
     
     invDenom = 1/(psi*(om+x2+(psi+s)**2))

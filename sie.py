@@ -11,9 +11,9 @@ def phiarray(xi,yi,modelargs,vec=False,numexpr=True):
         return core.cond_break(xi,yi,modelargs,[e==0,e!=0],[spherical,elliptical])
     else:
         if e==0:
-            return spherical(xi,yi,modelargs)
+            return spherical(xi,yi,modelargs,numexpr=numexpr)
         else:
-            return elliptical(xi,yi,modelargs)
+            return elliptical(xi,yi,modelargs,numexpr=numexpr)
     
         
 def elliptical(x,y,modelargs,numexpr=True):
