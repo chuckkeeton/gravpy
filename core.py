@@ -44,7 +44,7 @@ def mapping(v,u,modelargs,vec=False):
     w,z = u #image
     x,y = v #actual position we want to find
 
-    phiarr = potdefmag(x,y,modelargs,vec=vec).ravel()
+    phiarr = potdefmag(x,y,modelargs,vec=vec,numexpr=False).ravel()
     phix,phiy,phixx,phiyy,phixy = phiarr[1:6]
 
     return [[x-w,y-z] - np.array((phix,phiy)),
@@ -66,7 +66,7 @@ def magnification(x,y,modelargs,vec=False):
     
     return (1-phixx)*(1-phiyy)-phixy**2
 
-def ellipticity_calculation(x,y,mass_component,vec=False):
+def ellipticity_calculation(x,y,mass_component,vec=False,numexpr=True):
     model = models_list[mass_component[0]]
     args = mass_component[1] if vec else np.array(mass_component[1:])
     x0,y0 = args[1:3]
@@ -78,7 +78,7 @@ def ellipticity_calculation(x,y,mass_component,vec=False):
     xp = -s*(x-x0) + c*(y-y0)
     yp = -c*(x-x0) - s*(y-y0)
 
-    pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=vec)
+    pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=vec,numexpr=numexpr)
 
     # Inverse transformation back into desired coordinates. 
     new_phix = -s*px-c*py
@@ -89,7 +89,7 @@ def ellipticity_calculation(x,y,mass_component,vec=False):
 
     return  np.array((pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy))
 
-def potdefmag(xi,yi,modelargs,vec=False):
+def potdefmag(xi,yi,modelargs,vec=False,numexpr=True):
     '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
     phi2Darray = []
 
@@ -100,7 +100,7 @@ def potdefmag(xi,yi,modelargs,vec=False):
 
     for mass_component in modelargs:
         
-        phiarray = ellipticity_calculation(x,y,mass_component,vec=vec)
+        phiarray = ellipticity_calculation(x,y,mass_component,vec=vec,numexpr=numexpr)
 
         if vec:
             phi2Darray.extend(phiarray.transpose([2,0,1]))
@@ -164,14 +164,14 @@ def cond_break_vec(x,y,modelargs,conds,function_calls):
 
 def mag_of_cells(cells,modelargs,vec=False):
     '''Takes a list of cells and returns the magnification values for each point in the cells. Retains shape and order of the original list of cells.'''
+    num_points_in_cell = cells.shape[1] #usually 4, unless we're caching mag values (then it's 3)
     cells_x_y = cells.reshape((-1,2))
     cells_x = cells_x_y[:,0]
     cells_y = cells_x_y[:,1]
 
-    # possible area to optimize later, here, phiarray calculates on same values twice.
     mag_x_y = relation(cells_x,cells_y,modelargs,vec=vec)
     
-    return np.reshape(mag_x_y,(-1,4))
+    return np.reshape(mag_x_y,(-1,num_points_in_cell))
     
 
 def cell_mag_change(cells_mag):
@@ -202,12 +202,36 @@ def subdivide_cells(cells,grid_spacing,cell_depth):
 
     return np.vstack((quadrant1,quadrant2,quadrant3,quadrant4))
 
-def points5_wrapper(cells,modelargs,vec=False):
+def points5_wrapper(cells,modelargs,vec=False,subdivide=False):
     '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
-    cells_mag = mag_of_cells(cells,modelargs,vec=vec)
+    temp_cells = cells if not subdivide else subdivide_cells(cells,subdivide[0],subdivide[1])
+    cells_mag = mag_of_cells(temp_cells,modelargs,vec=vec)
     mag_change_mask = cell_mag_change(cells_mag)
-    return np.compress(mag_change_mask,cells,axis=0) #equivalent to cells[mag_change_mask] but faster
+    return np.compress(mag_change_mask,temp_cells,axis=0) #equivalent to cells[mag_change_mask] but faster
 
+def for_points5_wrapper(cells,grid_spacing,cell_depth,modelargs,vec=False):
+    '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
+    subdivided_cells = subdivide_cells(cells,grid_spacing,cell_depth)
+    cells_mag = mag_of_cells(subdivided_cells,modelargs,vec=vec)
+    mag_change_mask = cell_mag_change(cells_mag)
+    return np.compress(mag_change_mask,subdivided_cells,axis=0) #equivalent to cells[mag_change_mask] but faster
+
+def for_points5_wrapper_cached(cells,mag_cells,grid_spacing,cell_depth,modelargs,vec=False):
+    subdivided_cells = subdivide_cells(cells,grid_spacing,cell_depth)
+    
+    
+    q1,q2,q3,q4 = np.split(subdivided_cells,4)
+    q1,q2,q3,q4 = [np.delete(q,i,axis=1) for q,i in zip([q1,q2,q3,q4],[3,1,0,2])]
+    
+    m1,m2,m3,m4 = [mag_of_cells(q,modelargs,vec=vec) for q in [q1,q2,q3,q4]]
+    
+    c1,c2,c3,c4 = mag_cells.T #cache of old mag values (did not change)
+    
+    mag_combined = np.vstack([np.insert(m,i,c,axis=1) for m,i,c in zip([m1,m2,m3,m4],[3,1,0,2],[c4,c2,c1,c3])])
+    
+    mag_change_mask = cell_mag_change(mag_combined)
+    return [np.compress(mag_change_mask,mag_combined,axis=0),np.compress(mag_change_mask,subdivided_cells,axis=0)]
+    
 def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False,vec=False):
     '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
     x = xran[0:-1]
@@ -219,14 +243,17 @@ def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False,vec=
     gridm_x_y = np.vstack((np.dstack((xs,xs,xs+spacing,xs+spacing)),np.dstack((ys,ys+spacing,ys,ys+spacing))))
     cells = np.transpose(gridm_x_y,[1,2,0])
 
-    temp_cells = cells.copy()
-    cells_sel = points5_wrapper(temp_cells,modelargs,vec=vec)
+    # we don't want to subdivide the first iteration
+    cells_mag = mag_of_cells(cells,modelargs,vec=vec)
+    mag_change_mask = cell_mag_change(cells_mag)
     
+    cells_sel = np.compress(mag_change_mask,cells,axis=0) #equivalent to cells[mag_change_mask] but faster
+    cells_mag = np.compress(mag_change_mask,cells_mag,axis=0) # = cells_mag[mag_change_mask]
     output_pairs = []
     
     for i in range(recurse_depth):
-        temp_cells = subdivide_cells(cells_sel,spacing,i+1)
-        cells_sel = points5_wrapper(temp_cells,modelargs,vec=vec)
+        
+        cells_mag,cells_sel = for_points5_wrapper_cached(cells_sel,cells_mag,spacing,i+1,modelargs,vec=vec)
         
         if not caustics_mode:
             output_pairs.append(cells_sel)

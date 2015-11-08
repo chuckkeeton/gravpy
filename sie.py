@@ -10,6 +10,7 @@ def phiarray(xi,yi,modelargs,vec=False,numexpr=True):
     if vec:
         return core.cond_break(xi,yi,modelargs,[e==0,e!=0],[spherical,elliptical])
     else:
+        
         if e==0:
             return spherical(xi,yi,modelargs,numexpr=numexpr)
         else:

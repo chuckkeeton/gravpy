@@ -17,7 +17,7 @@ pimage = [0.25,0.25] #image location -if- we want to specify
 
 # If we want an image with runtime stats, set bool to true, otherwise runs the statement in the else branch.
 callgraph = True
-filepath = 'runs/numexprmkl1.png' #where we want to save the output image with the runtime breakdown
+filepath = 'runs/numexprmkl3.png' #where we want to save the output image with the runtime breakdown
 if callgraph:
     with PyCallGraph(output=GraphvizOutput(output_file=filepath)):
         core.run(pcarargs,ppolargs,pmodelargs, image=pimage, show_plot=False, caustics=False)
