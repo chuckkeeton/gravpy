@@ -202,34 +202,22 @@ def subdivide_cells(cells,grid_spacing,cell_depth):
 
     return np.vstack((quadrant1,quadrant2,quadrant3,quadrant4))
 
-def points5_wrapper(cells,modelargs,vec=False,subdivide=False):
-    '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
-    temp_cells = cells if not subdivide else subdivide_cells(cells,subdivide[0],subdivide[1])
-    cells_mag = mag_of_cells(temp_cells,modelargs,vec=vec)
-    mag_change_mask = cell_mag_change(cells_mag)
-    return np.compress(mag_change_mask,temp_cells,axis=0) #equivalent to cells[mag_change_mask] but faster
-
-def for_points5_wrapper(cells,grid_spacing,cell_depth,modelargs,vec=False):
-    '''Takes a list of cells and returns the cells for which the magnification changes sign. Function itself is a condensed command for three lines of code, which I did not want to write over and over again.'''
-    subdivided_cells = subdivide_cells(cells,grid_spacing,cell_depth)
-    cells_mag = mag_of_cells(subdivided_cells,modelargs,vec=vec)
-    mag_change_mask = cell_mag_change(cells_mag)
-    return np.compress(mag_change_mask,subdivided_cells,axis=0) #equivalent to cells[mag_change_mask] but faster
-
 def for_points5_wrapper_cached(cells,mag_cells,grid_spacing,cell_depth,modelargs,vec=False):
+    '''Function that subdivdes given cells, computes the magnification values for new points, merges the magnification values from \'mag_cells\' with the newly computed magnifcation values, and returns the magnification values and cells where a critical curve was detected.'''
     subdivided_cells = subdivide_cells(cells,grid_spacing,cell_depth)
     
+    q1,q2,q3,q4 = np.split(subdivided_cells,4) #need the points for each quadrant 
+    q1,q2,q3,q4 = [np.delete(q,i,axis=1) for q,i in zip([q1,q2,q3,q4],[3,1,0,2])] # remove the cells that stay the same
     
-    q1,q2,q3,q4 = np.split(subdivided_cells,4)
-    q1,q2,q3,q4 = [np.delete(q,i,axis=1) for q,i in zip([q1,q2,q3,q4],[3,1,0,2])]
-    
-    m1,m2,m3,m4 = [mag_of_cells(q,modelargs,vec=vec) for q in [q1,q2,q3,q4]]
+    m1,m2,m3,m4 = [mag_of_cells(q,modelargs,vec=vec) for q in [q1,q2,q3,q4]] # mag of points above
     
     c1,c2,c3,c4 = mag_cells.T #cache of old mag values (did not change)
     
-    mag_combined = np.vstack([np.insert(m,i,c,axis=1) for m,i,c in zip([m1,m2,m3,m4],[3,1,0,2],[c4,c2,c1,c3])])
+    mag_combined = np.vstack([np.insert(m,i,c,axis=1) for m,i,c in zip([m1,m2,m3,m4],[3,1,0,2],[c4,c2,c1,c3])]) #combine old values with newly calculated values
     
-    mag_change_mask = cell_mag_change(mag_combined)
+    mag_change_mask = cell_mag_change(mag_combined) #which cells had a change in magnification
+    
+    # return mag values of selected cells (used for the next level in gridding) and the cells themselves that had a mag change
     return [np.compress(mag_change_mask,mag_combined,axis=0),np.compress(mag_change_mask,subdivided_cells,axis=0)]
     
 def points5(xran,yran,spacing,modelargs,recurse_depth=3,caustics_mode=False,vec=False):
@@ -365,9 +353,10 @@ def run(carargs,polargs,modelargs,
     
     realpos = find_source(stack, transformed, dpoints.simplices, image, tempmodelargs)
 
-    stackx,stacky=np.transpose(stack)
-    tranx,trany = np.transpose(transformed)
-    mag = magnification(stackx,stacky,tempmodelargs)
+    #plotting variables, in-testing
+#    stackx,stacky=np.transpose(stack)
+#    tranx,trany = np.transpose(transformed)
+#    mag = magnification(stackx,stacky,tempmodelargs)
     
     
     if show_plot:
