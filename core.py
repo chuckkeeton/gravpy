@@ -2,7 +2,7 @@
 import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
-
+import numexpr as ne
 import trinterior as trint
 import plots
 
@@ -69,25 +69,27 @@ def magnification(x,y,modelargs,vec=False):
 def ellipticity_calculation(x,y,mass_component,vec=False,numexpr=True):
     model = models_list[mass_component[0]]
     args = mass_component[1] if vec else np.array(mass_component[1:])
+    
     x0,y0 = args[1:3]
     te = args[4]
+    pi = np.pi
     
-    #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate. 
-    c = np.cos(te*np.pi/180);c2=c*c
-    s = np.sin(te*np.pi/180);s2=s*s;sc=s*c
+    #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate.
+    c = np.cos(te*pi/180);c2=c*c
+    s = np.sin(te*pi/180);s2=s*s;sc=s*c
     xp = -s*(x-x0) + c*(y-y0)
     yp = -c*(x-x0) - s*(y-y0)
 
     pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=vec,numexpr=numexpr)
 
-    # Inverse transformation back into desired coordinates. 
+    # Inverse transformation back into desired coordinates.
     new_phix = -s*px-c*py
     new_phiy = c*px-s*py 
     new_phixx= s2*pxx+c2*pyy+2*sc*pxy
     new_phiyy= c2*pxx+s2*pyy-2*sc*pxy
     new_phixy= sc*(pyy-pxx)+(s2-c2)*pxy
 
-    return  np.array((pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy))
+    return np.array((pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy))
 
 def potdefmag(xi,yi,modelargs,vec=False,numexpr=True):
     '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
@@ -308,14 +310,14 @@ def transformations(car_ranges, pol_ranges, spacing, modelargs, recurse_depth=3,
     carstack = points5(x,y,spacing,modelargs,recurse_depth=recurse_depth,vec=vec)  #generate subgrid on cartesian grid
     polstack = np.array(pol_ranges)
     stack = np.concatenate((carstack,polstack),axis=0) #combine list of cartesian and polar pairs
-    transformed = np.array(carmapping(stack[:,0],stack[:,1],modelargs)) #transform pairs from image to source plane
+    transformed = carmapping(stack[:,0],stack[:,1],modelargs,vec=vec) #transform pairs from image to source plane
 
     dpoints = Delaunay(stack) # generate Delaunay object for triangulization/triangles
 
     return [stack, transformed, dpoints]
 
 
-def find_source(stack, transformed, simplices, image_loc, modelargs):
+def find_source(stack, transformed, simplices, image_loc, modelargs, vec=False):
     '''Employs the algorithm in the 'trinterior' module to find the positions of the image in the image plane. Returns the coordinate pair(s) in an array.'''
     
 
@@ -327,7 +329,7 @@ def find_source(stack, transformed, simplices, image_loc, modelargs):
     sourcetri = imagetri[indices] 
     sourcepos = np.mean(sourcetri,axis=1) #list of the centroid coordinates for the triangles which contain the point 'image'
     realpos = np.array(
-        [(op.root(mapping,v,args=(image_loc,modelargs),jac=True,tol=1e-4)).x
+        [(op.root(mapping,v,args=(image_loc,modelargs,vec),jac=True,tol=1e-4)).x
          for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
 
     return realpos
@@ -349,9 +351,9 @@ def run(carargs,polargs,modelargs,
         critx, crity = args[2]
         causticsx,causticsy = args[3]
 
-    stack, transformed, dpoints = transformations((x,y),polargrids,spacing, tempmodelargs, recurse_depth=recurse_depth)
+    stack, transformed, dpoints = transformations((x,y),polargrids,spacing, tempmodelargs, recurse_depth=recurse_depth, vec=vec)
     
-    realpos = find_source(stack, transformed, dpoints.simplices, image, tempmodelargs)
+    realpos = find_source(stack, transformed, dpoints.simplices, image, tempmodelargs,vec=vec)
 
     #plotting variables, in-testing
 #    stackx,stacky=np.transpose(stack)

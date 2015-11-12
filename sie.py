@@ -3,6 +3,10 @@ import numexpr as ne
 import core
 #modelargs: (major) radius, x-center position, y-center position, ellipticity, ellipticity angle, core radius
 
+
+if ne.use_vml:
+    ne.set_vml_accuracy_mode('fast')
+    
 def phiarray(xi,yi,modelargs,vec=False,numexpr=True):
     np.place(modelargs[-1],modelargs[-1]==0,1e-4) # replaces core radius (s)==0 -> 1e-4, fixes /0 situations in potential calculation. 
     b,x0,y0,e,te,s  = modelargs[:6]
@@ -10,7 +14,6 @@ def phiarray(xi,yi,modelargs,vec=False,numexpr=True):
     if vec:
         return core.cond_break(xi,yi,modelargs,[e==0,e!=0],[spherical,elliptical])
     else:
-        
         if e==0:
             return spherical(xi,yi,modelargs,numexpr=numexpr)
         else:
