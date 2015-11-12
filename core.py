@@ -1,5 +1,4 @@
 #!/usr/bin/python
-import mayavi.mlab as m 
 import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
