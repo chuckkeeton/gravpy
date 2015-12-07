@@ -5,7 +5,7 @@ import numpy as np
 def source_image_planes(stack,transformed,
                 simplices,
                 realpos,image,
-                lowerend,upperend,
+                        xlowerend,xupperend,ylowerend,yupperend,
                 caustics=False):
     '''Uses 'matplotlib' library to view the image and source plane, the triangulization mesh, critical curves, caustics, image and source position.'''
     
@@ -14,7 +14,7 @@ def source_image_planes(stack,transformed,
 
     plt.subplot(1,2,1) # image plane
     plt.title('Image Plane')
-    plt.axis([lowerend,upperend,lowerend,upperend])
+    plt.axis([xlowerend,xupperend,ylowerend,yupperend])
     plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
     
     if caustics:
@@ -24,10 +24,10 @@ def source_image_planes(stack,transformed,
    
     plt.scatter(*zip(*realpos), marker='*', color='green', s=100, zorder=2)
    
-
     plt.subplot(1,2,2) # source plane
     plt.title('Source Plane')
-    plt.axis([lowerend,upperend,lowerend,upperend])
+    plt.axis([xlowerend,xupperend,ylowerend,yupperend])
+        
     plt.gca().set_aspect('equal', adjustable='box') # equal ratios on x and y axis
 
     plt.triplot(transformed[:,0],transformed[:,1], simplices, color='blue', zorder=1) # plot of the transformed Delaunay Triangulization
