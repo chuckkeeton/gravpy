@@ -25,5 +25,5 @@ if callgraph:
         example = gravpy(pcarargs,ppolargs,pmodelargs, image=pimage, show_plot=False, include_caustics=False)
         example.run()
 else:
-    example = gravpy(pcarargs,ppolargs2,pmodelargs2)
+    example = gravpy(pcarargs,ppolargs,pmodelargs)
     example.run()

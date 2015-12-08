@@ -68,7 +68,7 @@ class gravpy:
         '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
         phi2Darray = []
     
-        #broadcasting-ready if vectorizing else (check for and) turn scalars into vectors of length 1
+        #turn scalars into vectors of length 1
         x = np.atleast_1d(xi) 
         y = np.atleast_1d(yi) 
         

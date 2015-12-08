@@ -13,7 +13,7 @@ class baseModel:
 def standard_frame_rotation(phiarray_function):
     '''A wrapper that rotates the incoming x,y values into the standard frame for lensing calculations and rotates the phiarray values back into the frame they were orginally in.'''
     @wraps(phiarray_function)
-    def rotation(self,x,y,**kwargs):
+    def rotation(self,x,y,*args,**kwargs):
         x0,y0 = self.x0,self.y0
         te = self.te
         
@@ -24,7 +24,7 @@ def standard_frame_rotation(phiarray_function):
         xp = -s*(x-x0) + c*(y-y0)
         yp = -c*(x-x0) - s*(y-y0)
 
-        pot,px,py,pxx,pyy,pxy = phiarray_function(self,xp,yp,**kwargs)
+        pot,px,py,pxx,pyy,pxy = phiarray_function(self,xp,yp,*args,**kwargs)
         
         # Inverse transformation back into desired coordinates.
         new_phix = -s*px-c*py
