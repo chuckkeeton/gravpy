@@ -7,11 +7,9 @@ import trinterior as trint
 import plots
 
 # lens model modules: 'models_list[modelargs[0]]' gives us the module to use
-import sie, alpha
-models_list = {'SIE':sie,'alpha':alpha}   
 class gravpy:
         
-    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3,vec=False):
+    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3):
         self.carargs = carargs
         self.xspacing = carargs[0][2]
         self.yspacing = carargs[1][2]
@@ -21,23 +19,7 @@ class gravpy:
         self.include_caustics = include_caustics
         self.image = image
         self.recurse_depth = recurse_depth
-        self.vec = vec
-    
-    def process_modelargs(self):
-        '''Groups same-model mass components into 2D arrays for quicker(?) vectorized computation.'''
-    
-        models = [mass_component[0] for mass_component in modelargs]
-        params = [mass_component[1:] for mass_component in modelargs]
-    
-        sortedmodels, invInd = np.unique(models,return_inverse=True)
-        num_models = len(sortedmodels)
-        
-        ind = [np.argwhere(invInd==i).flatten() for i in range(num_models)]
-        result = [ [sortedmodels[i], np.array(map(params.__getitem__,ind[i])).T.reshape((-1,1,len(ind[i])))] 
-            for i in range(num_models)] #hairy... but it works....
-    
-        self.modelargs = result
-    
+            
     def relation(self,x,y):
         '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
         
@@ -82,48 +64,19 @@ class gravpy:
         
         return (1-phixx)*(1-phiyy)-phixy**2
     
-    def ellipticity_calculation(self,x,y,mass_component,numexpr=True):
-        model = models_list[mass_component[0]]
-        args = mass_component[1] if self.vec else np.array(mass_component[1:])
-        
-        x0,y0 = args[1:3]
-        te = args[4]
-        pi = np.pi
-        
-        #transformation from actual coords to natural coords (the frame/axes are rotated so there is no ellipticity angle in the calculation). This makes the expressions in the model modules simpler to calculate.
-        c = np.cos(te*pi/180);c2=c*c
-        s = np.sin(te*pi/180);s2=s*s;sc=s*c
-        xp = -s*(x-x0) + c*(y-y0)
-        yp = -c*(x-x0) - s*(y-y0)
-    
-        pot,px,py,pxx,pyy,pxy = model.phiarray(xp,yp,args,vec=self.vec,numexpr=numexpr)
-    
-        # Inverse transformation back into desired coordinates.
-        new_phix = -s*px-c*py
-        new_phiy = c*px-s*py 
-        new_phixx= s2*pxx+c2*pyy+2*sc*pxy
-        new_phiyy= c2*pxx+s2*pyy-2*sc*pxy
-        new_phixy= sc*(pyy-pxx)+(s2-c2)*pxy
-    
-        return np.array((pot,new_phix,new_phiy,new_phixx,new_phiyy,new_phixy))
-    
     def potdefmag(self,xi,yi,numexpr=True):
         '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
         phi2Darray = []
     
         #broadcasting-ready if vectorizing else (check for and) turn scalars into vectors of length 1
-        x = np.expand_dims(xi,axis=1) if self.vec else np.atleast_1d(xi) 
-        y = np.expand_dims(yi,axis=1) if self.vec else np.atleast_1d(yi) 
+        x = np.atleast_1d(xi) 
+        y = np.atleast_1d(yi) 
         
-    
         for mass_component in self.modelargs:
             
-            phiarray = self.ellipticity_calculation(x,y,mass_component,numexpr=numexpr)
+            phiarray = mass_component.phiarray(x,y,numexpr=numexpr) 
     
-            if self.vec:
-                phi2Darray.extend(phiarray.transpose([2,0,1]))
-            else:
-                phi2Darray.append(phiarray)
+            phi2Darray.append(phiarray)
                 
         
         return np.sum(phi2Darray,axis=0)
@@ -311,8 +264,6 @@ class gravpy:
     def run(self):
         '''The master command that wraps and executes all the commands to run a gridding example. Use this function (excusively) when using this module.'''
                         
-        if self.vec:
-            self.process_modelargs()
         
         args = self.generate_ranges()
         

@@ -6,16 +6,6 @@ import numexpr as ne
 
 if ne.use_vml:
     ne.set_vml_accuracy_mode('fast')
-    
-def phiarray(xi,yi,modelargs,vec=False,numexpr=True):
-    np.place(modelargs[-1],modelargs[-1]==0,1e-4) # replaces core radius (s)==0 -> 1e-4, fixes /0 situations in potential calculation. 
-    b,x0,y0,e,te,s  = modelargs[:6]
-    
-    if e==0:
-        return spherical(xi,yi,modelargs,numexpr=numexpr)
-    else:
-        return elliptical(xi,yi,modelargs,numexpr=numexpr)
-    
         
 def elliptical(x,y,modelargs,numexpr=True):
     b,x0,y0,e,te,s  = modelargs[:6]
