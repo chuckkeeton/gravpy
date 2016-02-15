@@ -56,23 +56,20 @@ def xi_squared(u, x, y, q):
 def jn(n):
     def integrand(u, x, y, q):
         return (kappa(xi_squared(u, x, y, q)) / ((1.0 - (1.0 - q**2) * u)**(n + 0.5)))
-    # return lambda x, y, q: integrate.quad(lambda u: integrand(u, x, y, q), 0, 1)  # ~550 micro-seconds
-    return lambda x, y, q: integrate.quad(integrand, 0, 1, args=(x, y, q))  # ~510-520 micro-seconds
-    #return lambda x, y, q: integrate.quadrature(integrand, 0, 1, args=(x, y, q))  # ~3.2 - 3.4 ms
-    #return lambda x, y, q: integrate.romberg(integrand, 0, 1, args=(x, y, q))  # ~9.35 - 9.38 ms
+    return lambda x, y, q: integrate.quad(integrand, 0, 1, args=(x, y, q))
 
 def kn(n):
     def integrand(u, x, y, q):
         return (u * kappa_prime(xi_squared(u, x, y, q)) / ((1.0 - (1.0 - q**2) * u)**(n + 0.5)))
     return lambda x, y, q: integrate.quad(integrand, 0, 1, args=(x, y, q))
 
-analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
+# analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
 
-print phi_x(1, 1)
-print phi_y(1, 1)
-print phi_xx(1, 1)
-print analytic_answers[3]
-print phi_yy(1, 1)
-print analytic_answers[4]
-print phi_xy(1, 1)
-print analytic_answers[5]
+# print phi_x(1, 1)
+# print phi_y(1, 1)
+# print phi_xx(1, 1)
+# print analytic_answers[3]
+# print phi_yy(1, 1)
+# print analytic_answers[4]
+# print phi_xy(1, 1)
+# print analytic_answers[5]
