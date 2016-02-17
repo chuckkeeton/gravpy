@@ -30,12 +30,12 @@ def phi_xy(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
     result = k1(x, y, q, alpha, b, s)
     return (2.0 * q * x * y * result[0])
 
-def kappa(w, alpha=1.0, b=2.0, s=0.01):
+def kappa(w, alpha, b, s):
     # w = xi**2,
     # so xi**2 is not necessary
     return (0.5 * b**(2 - alpha)) / ((s**2 + w)**(1 - (alpha / 2.0)))
 
-def kappa_prime(w, alpha=1.0, b=2.0, s=0.01):
+def kappa_prime(w, alpha, b, s):
     # the derivative of kappa over w (xi**2)
     return 0.25 * (alpha - 2.0) * b**(2.0 - alpha) * (s**2.0 + w)**((alpha / 2.0) - 2.0)
 
