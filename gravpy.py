@@ -7,7 +7,7 @@ import trinterior as trint
 import plots
 
 # lens model modules: 'models_list[modelargs[0]]' gives us the module to use
-class gravpy:
+class gravlens:
         
     def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3):
         self.carargs = carargs

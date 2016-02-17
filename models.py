@@ -1,5 +1,5 @@
 import abc
-import pysie,pyalpha
+import siepy,alphapy
 from math import sin,cos,pi
 import numpy as np
 from functools import wraps
@@ -8,7 +8,7 @@ class baseModel:
 
     @abc.abstractmethod
     def phiarray(self,x,y):
-        '''Method that returns an array of (phi, dphi/dx, dphi/dy, d^2phi/dx^2, d^2phi/dy^2, d^2phi/(dxdy)) at the given coordinates x,y, where phi is the gravitational potential'''
+        '''Method that returns an array of [phi, dphi/dx, dphi/dy, d^2phi/dx^2, d^2phi/dy^2, d^2phi/(dxdy)] at the given coordinates x,y, where phi is the gravitational potential'''
 
 def standard_frame_rotation(phiarray_function):
     '''A wrapper that rotates the incoming x,y values into the standard frame for lensing calculations and rotates the phiarray values back into the frame they were orginally in.'''
@@ -24,7 +24,7 @@ def standard_frame_rotation(phiarray_function):
         xp = -s*(x-x0) + c*(y-y0)
         yp = -c*(x-x0) - s*(y-y0)
 
-        pot,px,py,pxx,pyy,pxy = phiarray_function(self,xp,yp,*args,**kwargs)
+        pot,px,py,pxx,pyy,pxy = phiarray_function(self,xp,yp,*args,**kwargs) #get the phiarray values
         
         # Inverse transformation back into desired coordinates.
         new_phix = -s*px-c*py
@@ -41,11 +41,8 @@ def standard_frame_rotation(phiarray_function):
 class SIE(baseModel):
     
     def __init__(self,b,x0,y0,e,te,s):
-        self.b = b
-        self.x0 = x0
-        self.y0 = y0
-        self.e = e
-        self.te = te
+        for key,value in locals().items():
+            setattr(self, key, value)
         self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
 
     @standard_frame_rotation
@@ -53,35 +50,42 @@ class SIE(baseModel):
         modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s]
         
         if self.e==0:
-            return pysie.spherical(x,y,modelargs,numexpr=numexpr)
+            return siepy.spherical(x,y,modelargs,numexpr=numexpr)
         else:
-            return pysie.elliptical(x,y,modelargs,numexpr=numexpr)
+            return siepy.elliptical(x,y,modelargs,numexpr=numexpr)
 
 
 class alpha(baseModel):
     def __init__(self,b,x0,y0,e,te,s,alpha):
-        self.b = b
-        self.x0 = x0
-        self.y0 = y0
-        self.e = e
-        self.te = te
+        for key,value in locals().items():
+            setattr(self, key, value)
         self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
-        self.alpha = alpha
-
 
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
         modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s]
-        
+        modelargs_with_alpha = [self.b,self.x0,self.y0,self.e,self.te,self.s,self.alpha]
         if self.alpha==1.0:
             if self.e == 0.0:
-                return pysie.spherical(x,y,modelargs,numexpr=numexpr)
+                return siepy.spherical(x,y,modelargs,numexpr=numexpr)
             else:
-                return pysie.elliptical(x,y,modelargs,numexpr=numexpr)
-        elif self.alpha==-1.0:
-            return pyalpha.plummer(x,y,modelargs)
+                return siepy.elliptical(x,y,modelargs,numexpr=numexpr)
+        elif self.alpha== -1.0:
+            return alphapy.plummer(x,y,modelargs)
         else:
-            raise "alpha!=(0 | -1) not implemented yet"
+            return alphapy.general(x,y,modelargs_with_alpha)
 
+class nfw(baseModel):
+    def __init__(self,b,x0,y0,e,te,s,k,r):
+        for key,value in locals().items():
+            setattr(self, key, value)
+        self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
+
+    @standard_frame_rotation
+    def phiarray(self,x,y,numexpr=True):
+        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s,self.k,self.r]
+        
+
+        
 
     
