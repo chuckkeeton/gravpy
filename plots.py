@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-
 import numpy as np
 
 def source_image_planes(stack,transformed,
