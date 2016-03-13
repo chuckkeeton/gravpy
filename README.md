@@ -31,7 +31,7 @@ Make sure to install these libraries before running!
 
 #Images
 ##SIE
-[SIE](images/sie_sparse_inner.png "Classic SIE model, spherical symmetry, zero core radius")
+![SIE](images/sie_sparse_inner.png "Classic SIE model, spherical symmetry, zero core radius")
 ##Plummer - Alpha = -1 Case
-[Plummer](images/plummer2.png "Plummer model (alpha = -1 model)")
+![Plummer](images/plummer2.png "Plummer model (alpha = -1 model)")
 
