@@ -9,6 +9,11 @@ from alphaf import alphaf
 from nfwf import nfwf
 
 class baseModel:
+    __metaclass__ = abc.ABCMeta
+    @abc.abstractmethod
+    def modelargs(self):
+        '''Define and return a list of the model parameters'''
+        
     @abc.abstractmethod
     def phiarray(self,x,y):
         '''Method that returns an array of [phi, dphi/dx, dphi/dy, d^2phi/dx^2, d^2phi/dy^2, d^2phi/(dxdy)] at the given coordinates x,y, where phi is the gravitational potential'''
@@ -47,10 +52,12 @@ class SIE(baseModel):
         for key,value in locals().items():
             setattr(self, key, value)
         self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
-
+    def modelargs(self):
+        return [self.b,self.x0,self.y0,self.e,self.te,self.s]
+    
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
-        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s]
+        modelargs = self.modelargs()
         
         if self.e==0:
             return siepy.spherical(x,y,modelargs,numexpr=numexpr)
@@ -64,10 +71,17 @@ class alpha(baseModel):
             setattr(self, key, value)
         self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
 
+    def modelargs(self,alpha=False):
+        if alpha:
+            return [self.b,self.x0,self.y0,self.e,self.te,self.s,self.alpha]
+        else:
+            return [self.b,self.x0,self.y0,self.e,self.te,self.s]
+        
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
-        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s]
-        modelargs_with_alpha = [self.b,self.x0,self.y0,self.e,self.te,self.s,self.alpha]
+        modelargs = self.modelargs()
+        modelargs_with_alpha = self.modelargs(alpha=True)
+        
         if self.alpha==1.0:
             if self.e == 0.0:
                 return siepy.spherical(x,y,modelargs,numexpr=numexpr)
@@ -84,11 +98,13 @@ class nfw(baseModel):
             setattr(self, key, value)
         if self.rs == 0.0:
             raise ValueError("NFW scale radius cannot be zero")
-        
+
+    def modelargs(self):
+        return [self.b,self.x0,self.y0,self.e,self.te,self.rs]
 
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
-        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.rs]
+        modelargs = modelargs()
         
         return nfwf.nfw(x,y,modelargs)
 

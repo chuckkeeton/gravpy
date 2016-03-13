@@ -98,8 +98,9 @@ class gravlens:
     def cell_mag_change(cells_mag):
         '''Takes a list of magnification values of a list of cells and returns a boolean mask for which the magnification changes across a cell. Uses numpy vectorization.'''
         fir,sec,thr,frt = cells_mag.T
-        
-        less1 = np.vstack((fir*sec,sec*frt,frt*thr,thr*fir)) < 1
+
+        with np.errstate(invalid='ignore'): 
+            less1 = np.vstack((fir*sec,sec*frt,frt*thr,thr*fir)) < 1
         
         output = np.any(less1,axis=0)
                 
