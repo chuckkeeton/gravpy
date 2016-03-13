@@ -74,6 +74,7 @@ class gravlens:
         
         for mass_component in self.modelargs:
             
+            
             phiarray = mass_component.phiarray(x,y,numexpr=numexpr) 
     
             phi2Darray.append(phiarray)
@@ -100,7 +101,12 @@ class gravlens:
         
         less1 = np.vstack((fir*sec,sec*frt,frt*thr,thr*fir)) < 1
         
-        return np.any(less1,axis=0)
+        output = np.any(less1,axis=0)
+                
+        if np.count_nonzero(output) == 0: #np.all doesn't catch the error
+            raise ValueError("Magnification does not change across grid, change grid parameters so that critical curves are seen.")
+        else:
+            return output
 
     
     def subdivide_cells(self,cells,cell_depth):
@@ -129,7 +135,8 @@ class gravlens:
                 
         subdivided_cells = self.subdivide_cells(cells,cell_depth)
         
-        q1,q2,q3,q4 = np.split(subdivided_cells,4) #need the points for each quadrant 
+        q1,q2,q3,q4 = np.split(subdivided_cells,4) #need the points for each quadrant
+        
         q1,q2,q3,q4 = [np.delete(q,i,axis=1) for q,i in zip([q1,q2,q3,q4],[3,1,0,2])] # remove the cells that stay the same
         
         m1,m2,m3,m4 = [self.mag_of_cells(q) for q in [q1,q2,q3,q4]] # mag of points above
@@ -160,6 +167,7 @@ class gravlens:
         mag_change_mask = self.cell_mag_change(cells_mag)
         
         cells_sel = np.compress(mag_change_mask,cells,axis=0) #equivalent to cells[mag_change_mask] but faster
+                
         cells_mag = np.compress(mag_change_mask,cells_mag,axis=0) # = cells_mag[mag_change_mask]
         output_pairs = []
         
@@ -264,6 +272,7 @@ class gravlens:
     def run(self):
         '''The master command that wraps and executes all the commands to run a gridding example. Use this function (excusively) when using this module.'''
                         
+        self.validate_arguments()
         
         args = self.generate_ranges()
         
@@ -274,6 +283,8 @@ class gravlens:
             critx, crity = args[2]
             causticsx,causticsy = args[3]
             self.caustics = [[critx,crity],[causticsx,causticsy]]
+        else:
+            self.caustics = False
             
         self.transformations((x,y),polargrids)
         
@@ -281,6 +292,15 @@ class gravlens:
         
         if self.show_plot:
             self.plot()
+
+    def validate_arguments(self):
+        if not np.array(self.carargs).shape==(2,3):
+            raise AssertionError("'carargs' are not of the correct shape")
+        if not type(self.polargs[0]) is list:
+            raise AssertionError("'polargs' is not a list of list(s)")
+        if not type(self.modelargs) is list:
+            raise AssertionError("'modelargs' is not a list of models")
+
         
     def plot(self):
 

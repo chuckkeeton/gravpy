@@ -2,6 +2,7 @@ import numpy as np
 import scipy.special as sp
 import scipy.integrate as scipyint
 import itertools
+import warnings
 
 def plummer(x,y,modelargs):
     '''Calculation for the alpha=-1 case'''
@@ -29,7 +30,7 @@ def plummer(x,y,modelargs):
     phixx = -2.0*front*x2*((psi+q2*s)/tmp)**2/psi2 + front*(psi2 *(psi+q2*s)-q2**2*x2*s)/(psi3*tmp)
     phiyy = -2.0*front*y2*((psi+   s)/tmp)**2/psi2 + front*(psi2 *(psi   +s)-      y2*s)/(psi3*tmp)
     phixy = -front*x*y*(2.0*(psi+s)*(psi+q2*s)/(psi2*tmp*tmp) + q2*s/(psi3*tmp))
-    pot = 0.5*front*np.log((psi*s)**2+om*x2) - front*np.log(s*(1.0+np.fabs(q)))
+    pot   = 0.5*front*np.log((psi*s)**2+om*x2) - front*np.log(s*(1.0+np.fabs(q)))
     
     return np.array((pot,phix,phiy,phixx,phiyy,phixy))
 
@@ -56,6 +57,7 @@ def general(x,y,modelargs):
             phixy  = (phirr-phir_r)*sint*cost
                 
             if abs(s) <= 2.0*r:
+                warnings.warn("Calling hypergeo and gamma functions")
                 pot  = sp.hyp2f1(-0.5*a,-0.5*a,1.0-0.5*a,-(s*s)/(r*r))
                 pot *= b*b*np.power(r/b,a)/(a*a)
                 pot -= b*b*np.power(s/b,a)/a*(np.log(r/s)+0.5*(0.577216-sp.digamma(-0.5*a)))
@@ -83,7 +85,7 @@ def alpha0phir(r,s,a):
     if r/s < 1.0e-4:
         return r*np.power(s,a-2.0)
     elif a==0.0:
-        return np.log(1.0+r*r/s*s)/r
+        return np.log(1.0+r*r/(s*s))/r
     else:
         return 2.0/(a*r)*(np.power(s*s+r*r,a/2.0) - np.power(s,a))
 

@@ -1,11 +1,14 @@
 import abc
-import siepy,alphapy
 from math import sin,cos,pi
 import numpy as np
 from functools import wraps
 
-class baseModel:
+import siepy,alphapy
+# f2py modules imported below, clunky pathing due to fortran modules, full function path is fmodel.fmodel.routine
+from alphaf import alphaf 
+from nfwf import nfwf
 
+class baseModel:
     @abc.abstractmethod
     def phiarray(self,x,y):
         '''Method that returns an array of [phi, dphi/dx, dphi/dy, d^2phi/dx^2, d^2phi/dy^2, d^2phi/(dxdy)] at the given coordinates x,y, where phi is the gravitational potential'''
@@ -73,18 +76,21 @@ class alpha(baseModel):
         elif self.alpha== -1.0:
             return alphapy.plummer(x,y,modelargs)
         else:
-            return alphapy.general(x,y,modelargs_with_alpha)
+            return alphaf.general(x,y,modelargs_with_alpha)
 
 class nfw(baseModel):
-    def __init__(self,b,x0,y0,e,te,s,k,r):
+    def __init__(self,b,x0,y0,e,te,rs):
         for key,value in locals().items():
             setattr(self, key, value)
-        self.s = s if s!=0.0 else 1e-4 # replaces core radius from s==0 -> 1e-4, fixes /0 situations in potential calculation.
+        if self.rs == 0.0:
+            raise ValueError("NFW scale radius cannot be zero")
+        
 
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
-        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.s,self.k,self.r]
+        modelargs = [self.b,self.x0,self.y0,self.e,self.te,self.rs]
         
+        return nfwf.nfw(x,y,modelargs)
 
         
 

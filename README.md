@@ -11,13 +11,14 @@ At this current version, this project does the following:
 # Supported Models
 ## Fully Implemented:
 * Alpha = 1 (Singular Isothermal Ellipsoid)
-
-## Models that are not fully functional in this version:
 * Alpha = -1 (Plummer Model)
 
-## Not yet Implemented:
+## Models that are not fully functional in this version:
 * General Alpha case
 * NFW
+
+## Not yet Implemented:
+* Truncated Models
 
 # Dependencies:
 Make sure to install these libraries before running!
