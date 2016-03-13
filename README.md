@@ -29,4 +29,9 @@ Make sure to install these libraries before running!
 * numexpr
 * pycallgraph (this library can be excluded if you are not interested in seeing runtimes, make sure to comment out the relevant lines in `example_run.py`)
 
+#Images
+##SIE
+[SIE](images/sie_sparse_inner.png "Classic SIE model, spherical symmetry, zero core radius")
+##Plummer - Alpha = -1 Case
+[Plummer](images/plummer2.png "Plummer model (alpha = -1 model)")
 
