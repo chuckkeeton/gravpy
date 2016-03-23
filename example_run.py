@@ -12,7 +12,7 @@ pmodelargs = [
 ppolargs = [[(-0.45,-0.5),0.9,10,42],
             [(1.5,1.5),0.5,10,42]] # center position (coordinate pair), outer radius, number of divisions in radius, number of divisions in angle (for 360 degrees)
 pmodelargs2 = [alpha(1,0,0,0.2,0,0.,0.75)]
-pmodelargs3 = [nfw(2,0,0,0,0,0.5)]
+pmodelargs3 = [nfw(2,0,0,0.1,0,0.5)]
 ppolargs2 = [[(0,0),0.9,10,42]]
 pcarargs = [[-2.5,2.5,0.5],[-2.5,2.5,0.5]] # lower bound, upper bound, initial spacing (two sets--for x and y axes)
 pimage = [0.25,0.25] #image location -if- we want to specify
@@ -33,10 +33,6 @@ if callgraph:
         example = gravlens(pcarargs,ppolargs2,pmodelargs2, image=pimage, show_plot=False, include_caustics=False)
         example.run()
 else:
-    example = gravlens(pcarargs,ppolargs2,pmodelargs3,image=pimage)
+    example = gravlens(pcarargs,ppolargs2,pmodelargs3,image=pimage, include_caustics=False )
     example.run()
-
-#from nfwf import nfwf
-#print "running nfwf module"
-#print nfwf.single_eval(0.1,0.1,(1,0,0,0.0,0,0.1))
-#print nfwf.single_eval(0.1,0.1,(1,0,0,0.1,0,0.1))
+    print "%d points evaluated" % example.num_eval 

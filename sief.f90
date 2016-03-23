@@ -1,4 +1,4 @@
-module fsie
+module sief
   implicit NONE
 
 contains
@@ -162,4 +162,4 @@ contains
     end do
   end subroutine phiarray_vec
 
-end module fsie
+end module sief

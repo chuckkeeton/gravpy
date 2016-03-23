@@ -11,7 +11,7 @@ all :
 	make sief.so alphaf.so nfwf.so
 
 clean :
-	rm alphaf.so nfwf.so sief.so
+	rm -f alphaf.so nfwf.so sief.so
 
 re :
 	make clean

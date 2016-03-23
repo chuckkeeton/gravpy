@@ -5,6 +5,7 @@ from functools import wraps
 
 import siepy,alphapy
 # f2py modules imported below, clunky pathing due to fortran modules, full function path is fmodel.fmodel.routine
+from sief import sief
 from alphaf import alphaf 
 from nfwf import nfwf
 
@@ -104,7 +105,7 @@ class nfw(baseModel):
 
     @standard_frame_rotation
     def phiarray(self,x,y,numexpr=True):
-        modelargs = modelargs()
+        modelargs = self.modelargs()
         
         return nfwf.nfw(x,y,modelargs)
 

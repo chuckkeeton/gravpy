@@ -6,10 +6,9 @@ import numexpr as ne
 import trinterior as trint
 import plots
 
-# lens model modules: 'models_list[modelargs[0]]' gives us the module to use
 class gravlens:
         
-    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3):
+    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3,caustics_depth=8):
         self.carargs = carargs
         self.xspacing = carargs[0][2]
         self.yspacing = carargs[1][2]
@@ -19,7 +18,10 @@ class gravlens:
         self.include_caustics = include_caustics
         self.image = image
         self.recurse_depth = recurse_depth
-            
+        self.caustics_depth= caustics_depth
+        
+        self.num_eval = 0
+        
     def relation(self,x,y):
         '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
         
@@ -50,7 +52,7 @@ class gravlens:
     
     def carmapping(self,x,y):
         '''mapping of cartesian coordinates from image to source plane'''
-        
+        print "--Mapping Call--"
         phiarr = self.potdefmag(x,y)
         phix,phiy = phiarr[1:3]
         
@@ -58,7 +60,7 @@ class gravlens:
     
     def magnification(self,x,y):
         '''returns the magnification of the points '''
-    
+        print "--Magnification Call--"
         phiarr = self.potdefmag(x,y)
         phixx,phiyy,phixy = phiarr[3:6]
         
@@ -71,15 +73,16 @@ class gravlens:
         #turn scalars into vectors of length 1
         x = np.atleast_1d(xi) 
         y = np.atleast_1d(yi) 
-        
+
+        self.num_eval += x.size
+
+        print "Evaluating %d points..." % x.size
+
         for mass_component in self.modelargs:
             
-            
             phiarray = mass_component.phiarray(x,y,numexpr=numexpr) 
-    
             phi2Darray.append(phiarray)
                 
-        
         return np.sum(phi2Darray,axis=0)
     
     
@@ -124,10 +127,10 @@ class gravlens:
         dy = self.yspacing/ 2**cell_depth
         
         #below code uses broadcasting to 'shrink' each cell into a fourth of its size, but still retaining one of its vertices. This happens four times, shrinking each time towards one of the four vertices, leaving four quarter cells that together make up the original cell.
-        quadrant1 = cells + [[dx,dy],[dx,0],[0,dy],[0,0]]
-        quadrant2 = cells + [[0,dy],[0,0],[-dx,dy],[-dx,0]]
-        quadrant3 = cells + [[0,0],[0,-dy],[-dx,0],[-dx,-dy]]
-        quadrant4 = cells + [[dx,0],[dx,-dy],[0,0],[0,-dy]]
+        quadrant1 = cells + [[dx, dy],[dx,  0],[0  , dy],[0  ,  0]]
+        quadrant2 = cells + [[0 , dy],[0 ,  0],[-dx, dy],[-dx,  0]]
+        quadrant3 = cells + [[0 ,  0],[0 ,-dy],[-dx,  0],[-dx,-dy]]
+        quadrant4 = cells + [[dx,  0],[dx,-dy],[0  ,  0],[0  ,-dy]]
     
         return np.vstack((quadrant1,quadrant2,quadrant3,quadrant4))
     
@@ -151,7 +154,7 @@ class gravlens:
         # return mag values of selected cells (used for the next level in gridding) and the cells themselves that had a mag change
         return [np.compress(mag_change_mask,mag_combined,axis=0),np.compress(mag_change_mask,subdivided_cells,axis=0)]
     
-    def points5(self,xran,yran,caustics_mode=False):
+    def points5(self,xran,yran):#,caustics_mode=False):
         '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
                 
         x = xran[0:-1]
@@ -172,19 +175,21 @@ class gravlens:
         cells_mag = np.compress(mag_change_mask,cells_mag,axis=0) # = cells_mag[mag_change_mask]
         output_pairs = []
         
-        depth = 8 if caustics_mode else self.recurse_depth
+        depth = self.caustics_depth if self.include_caustics else self.recurse_depth
         for i in range(depth):
             
             cells_mag,cells_sel = self.for_points5_wrapper_cached(cells_sel,cells_mag,i+1)
             
-            if not caustics_mode:
-                output_pairs.append(cells_sel)
+            #if not caustics_mode:
+            output_pairs.append(cells_sel)
     
-        if not caustics_mode:
-            output_pairs = np.vstack(output_pairs).reshape((-1,2))
-            return np.vstack((grid_pairs,output_pairs))
-        else:
-            return np.mean(cells_sel,axis=1) # don't want the vertices of each cell; just the (center) of each cell
+        #if not caustics_mode:
+        output_pairs = np.vstack(output_pairs).reshape((-1,2))
+        if self.include_caustics:
+            self.critical_lines = np.transpose(np.mean(cells_sel,axis=1)) # don't want the vertices of each cell; just the (center) of each cell
+            
+        return np.vstack((grid_pairs,output_pairs))
+        
     
     
     def generate_ranges(self):
@@ -224,15 +229,15 @@ class gravlens:
             polargrids = np.vstack((polargrids,shiftedpairs))
             
         #caustics and critical curves, if include_caustics == True
-        if self.include_caustics:
-            ## critical curves
-            critx, crity = np.transpose(self.points5(x,y,caustics_mode=True))
-            ## caustics
-            causticsx,causticsy = np.transpose(self.carmapping(critx,crity))
-            return [ [x,y], polargrids, [critx, crity], [causticsx, causticsy] ]
+#        if self.include_caustics:
+#            ## critical curves
+#            critx, crity = np.transpose(self.points5(x,y,caustics_mode=True))
+#            ## caustics
+#            causticsx,causticsy = np.transpose(self.carmapping(critx,crity))
+#            return [ [x,y], polargrids, [critx, crity], [causticsx, causticsy] ]
         #otherwise just return x,y grid and polar grids
-        else:
-            return  [[x,y], polargrids]
+#        else:
+        return  [[x,y], polargrids]
     
     
     def transformations(self,car_ranges, pol_ranges):
@@ -244,7 +249,14 @@ class gravlens:
         polstack = np.array(pol_ranges)
         stack = np.concatenate((carstack,polstack),axis=0) #combine list of cartesian and polar pairs
         transformed = self.carmapping(stack[:,0],stack[:,1]) #transform pairs from image to source plane
-    
+        if self.include_caustics:
+            criticalx, criticaly = self.critical_lines
+            causticsx, causticsy = np.transpose(self.carmapping(criticalx,criticaly))
+            self.caustics = [[criticalx,criticaly],[causticsx,causticsy]]
+        else:
+            self.caustics = None
+
+            
         dpoints = Delaunay(stack) # generate Delaunay object for triangulization/triangles
 
         self.stack = stack
@@ -280,12 +292,11 @@ class gravlens:
         x,y = args[0]
         polargrids = args[1]
     
-        if self.include_caustics:
-            critx, crity = args[2]
-            causticsx,causticsy = args[3]
-            self.caustics = [[critx,crity],[causticsx,causticsy]]
-        else:
-            self.caustics = False
+        #if self.include_caustics:
+            #critx, crity = args[2]
+            #causticsx,causticsy = args[3]
+            #self.caustics = [[critx,crity],[causticsx,causticsy]]
+        #else:
             
         self.transformations((x,y),polargrids)
         
