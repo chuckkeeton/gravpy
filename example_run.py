@@ -1,7 +1,7 @@
 from gravpy import Gravpy
 from pycallgraph import PyCallGraph
 from pycallgraph.output import GraphvizOutput
-from models import SIE, Alpha
+from models import SIE, Alpha, NFW
 
 #############################
 # Actual parameters needed for evaluation
@@ -9,10 +9,11 @@ from models import SIE, Alpha
 # models' args, - look in models.py for parameter order
 # (simliar to gravlens param order minus the two shear parameters)
 pmodelargs = [
-    SIE(0.75, -0.45, -0.5, 0.1, 20, 0.1),
-    SIE(0.5, 1.5, 1.5, 0, 0.2, 0.0),
-    SIE(0.1, 0.25, 0.25, 0.1, 0, 0),
-    SIE(0.3, -0.4, 0.6, 0.5, 45, 0)
+    # SIE(0.75, -0.45, -0.5, 0.1, 20, 0.1),
+    # SIE(0.5, 1.5, 1.5, 0, 0.2, 0.0),
+    # SIE(0.1, 0.25, 0.25, 0.1, 0, 0),
+    SIE(0.3, -0.4, 0.6, 0.5, 45, 0),
+    # NFW(0.5, 0, 0, 0, 0, 0.5, 1, 1)
 ]
 
 # center position (coordinate pair), outer radius, number of divisions in radius,

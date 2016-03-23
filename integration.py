@@ -1,65 +1,103 @@
 from scipy.integrate import quad
+from numpy import sqrt
 
 
-def phi_x(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    j0 = jn(0)
-    result = j0(x, y, q, alpha, b, s)
-    return (q * x * result[0]), result[1]
+def phi(x, y, q, phi_r):
+    """Lensing potential"""
+    local_i = i(phi_r, q)
+    result, err = local_i(x, y)
+    return (q / 2.0) * result
 
 
-def phi_y(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    j1 = jn(1)
-    result = j1(x, y, q, alpha, b, s)
-    return (q * x * result[0]), result[1]
+def phi_x(x, y, q, kappa):
+    """deflection in x at position (x, y)
+    
+    Arguments:
+        x {number} -- x coordinate
+        y {number} -- y coordinate
+        q {number} -- q = 1 - elipticity
+        kappa {function} -- takes in 1 argument: xi
+                            (eliptical coordinate)
+    
+    Returns:
+        number -- the deflection in x
+    """
+    j0 = jn(0, q, kappa)
+    result, err = j0(x, y)
+    return q * x * result
 
 
-def phi_xx(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k0 = kn(0)
-    j0 = jn(0)
-    result_k0 = k0(x, y, q, alpha, b, s)
-    result_j0 = j0(x, y, q, alpha, b, s)
-    return 2.0 * q * x ** 2.0 * result_k0[0] + q * result_j0[0]
+def phi_y(x, y, q, kappa):
+    j1 = jn(1, q, kappa)
+    result, err = j1(x, y)
+    return q * x * result
 
 
-def phi_yy(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k2 = kn(2)
-    j1 = jn(1)
-    result_k2 = k2(x, y, q, alpha, b, s)
-    result_j1 = j1(x, y, q, alpha, b, s)
-    return 2.0 * q * y ** 2.0 * result_k2[0] + q * result_j1[0]
+def phi_xx(x, y, q, kappa, kappa_prime):
+    k0 = kn(0, q, kappa_prime)
+    j0 = jn(0, q, kappa)
+    result_k, err_k = k0(x, y)
+    result_j, err_j = j0(x, y)
+    return 2.0 * q * x ** 2.0 * result_k + q * result_j
 
 
-def phi_xy(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k1 = kn(1)
-    result = k1(x, y, q, alpha, b, s)
-    return 2.0 * q * x * y * result[0]
+def phi_yy(x, y, q, kappa, kappa_prime):
+    k2 = kn(2, q, kappa_prime)
+    j1 = jn(1, q, kappa)
+    result_k, err_k = k2(x, y)
+    result_j, err_j = j1(x, y)
+    return 2.0 * q * y ** 2.0 * result_k + q * result_j
 
 
-def kappa(w, alpha, b, s):
+def phi_xy(x, y, q, kappa_prime):
+    k1 = kn(1, q, kappa_prime)
+    result, err = k1(x, y)
+    return 2.0 * q * x * y * result
+
+
+def sple_kappa(w, alpha, b, s):
     # w = xi**2,
     # so xi**2 is not necessary
     return (0.5 * b ** (2 - alpha)) / ((s ** 2 + w) ** (1 - (alpha / 2.0)))
 
 
-def kappa_prime(w, alpha, b, s):
+def sple_kappa_prime(w, alpha, b, s):
     # the derivative of kappa over w (xi**2)
     return 0.25 * (alpha - 2.0) * b ** (2.0 - alpha) * (s ** 2.0 + w) ** ((alpha / 2.0) - 2.0)
 
 
-def xi_squared(u, x, y, q):
+def xi(x, y, q):
+    return sqrt(xi_squared(x, y, q))
+
+
+def xi_squared(x, y, q):
+    return x**2 + (y**2 / q**2)
+
+
+def xi_u(u, x, y, q):
+    return sqrt(xi_u_squared(u, x, y, q))
+
+
+def xi_u_squared(u, x, y, q):
     return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - q ** 2) * u))))
 
 
-def jn(n):
-    def integrand(u, x, y, q, alpha, b, s):
-        return kappa(xi_squared(u, x, y, q), alpha, b, s) / ((1.0 - (1.0 - q ** 2) * u) ** (n + 0.5))
-    return lambda x, y, q, alpha, b, s: quad(integrand, 0, 1, args=(x, y, q, alpha, b, s))
+def i(phi_r, q):
+    def integrand(u, x, y):
+        return (xi_u(u, x, y, q) / u) * phi_r(xi(u, x, y, q)) / (1.0 - (1.0 - q**2) * u)**0.5
+    return lambda x, y: quad(integrand, 0, 1, args=(x, y))
 
 
-def kn(n):
-    def integrand(u, x, y, q, alpha, b, s):
-        return u * kappa_prime(xi_squared(u, x, y, q), alpha, b, s) / ((1.0 - (1.0 - q ** 2) * u) ** (n + 0.5))
-    return lambda x, y, q, alpha, b, s: quad(integrand, 0, 1, args=(x, y, q, alpha, b, s))
+def jn(n, q, kappa):
+    def integrand(u, x, y):
+        return kappa(xi_u_squared(u, x, y, q)) / ((1.0 - (1.0 - q**2) * u)**(n + 0.5))
+    return lambda x, y: quad(integrand, 0, 1, args=(x, y))
+
+
+def kn(n, q, kappa_prime):
+    def integrand(u, x, y):
+        return u * kappa_prime(xi_u_squared(u, x, y, q)) / ((1.0 - (1.0 - q**2) * u)**(n + 0.5))
+    return lambda x, y: quad(integrand, 0, 1, args=(x, y))
 
     ###########
     # analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
