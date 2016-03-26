@@ -54,7 +54,7 @@ class gravlens:
     
     def carmapping(self,x,y):
         '''mapping of cartesian coordinates from image to source plane'''
-        
+        print "******Mapping Call******"
         phiarr = self.potdefmag(x,y)
         phix,phiy = phiarr[1:3]
         
@@ -62,7 +62,7 @@ class gravlens:
     
     def magnification(self,x,y):
         '''returns the magnification of the points '''
-        
+        print "***Magnification Call***"
         phiarr = self.potdefmag(x,y)
         phixx,phiyy,phixy = phiarr[3:6]
         
@@ -70,7 +70,6 @@ class gravlens:
 
     def memoize(obj):
         
-
         @functools.wraps(obj)
         def memoizer(*args, **kwargs):
             __self,xi,yi = args
@@ -82,11 +81,11 @@ class gravlens:
 
             xc = []
             yc = []
-            cach = []
-            for i in range(x.size):
+            cach = set() # use bloom filter if this gets too large
+            for i in xrange(x.size):
                 key = str(x[i]) + " , " + str(y[i])
                 if key in cache:
-                    cach.append(i)
+                    cach.add(i)
                 else:
                     xc.append(x[i])
                     yc.append(y[i])
@@ -97,9 +96,10 @@ class gravlens:
             if len(xc) is not 0:
                 phiarray = np.transpose(obj(__self,xc,yc,**kwargs))
 
+            
             outarray = []
             counter = 0
-            for i in range(x.size):
+            for i in xrange(x.size):
                 key = str(x[i]) + " , " + str(y[i])
                 if i in cach:
                     outarray.append(cache[key])
@@ -164,7 +164,7 @@ class gravlens:
 
     
     def subdivide_cells(self,cells,cell_depth):
-        '''Divides each cell in a list of cells (given by [[p1, p2],[p3, p4]]) into four smaller cells. On the cartesian grid, the points are ordered as so:
+        '''Divides each cell in a list of cells (a cell given by [p1, p2, p3, p4]) into four smaller cells. On the cartesian grid, the points are ordered as so:
         p2--------p4         |
         |         |      II  |  I
         |         |     -----|-----
@@ -177,28 +177,46 @@ class gravlens:
         dy = self.yspacing/ 2**cell_depth
         
         #below code uses broadcasting to 'shrink' each cell into a fourth of its size, but still retaining one of its vertices. This happens four times, shrinking each time towards one of the four vertices, leaving four quarter cells that together make up the original cell.
-        quadrant1 = cells + [[dx, dy],[dx,  0],[0  , dy],[0  ,  0]]
-        quadrant2 = cells + [[0 , dy],[0 ,  0],[-dx, dy],[-dx,  0]]
-        quadrant3 = cells + [[0 ,  0],[0 ,-dy],[-dx,  0],[-dx,-dy]]
-        quadrant4 = cells + [[dx,  0],[dx,-dy],[0  ,  0],[0  ,-dy]]
+        
+        p1,p2,p3,p4 = np.transpose(cells,[1,0,2])
+        p24 = p4 + [-dx,  0]
+        p12 = p2 + [0  ,-dy]
+        p13 = p1 + [dx ,  0]
+        p34 = p3 + [0  , dy]
+        p0  = p1 + [ dx, dy]
+
+
+        quadrant1 = [p0,p24,p34,p4]
+        quadrant2 = [p12,p2,p0,p24]
+        quadrant3 = [p1,p12,p13,p0]
+        quadrant4 = [p13,p0,p3,p34]
+        # quadrant1 = cells + [[dx, dy],[dx,  0],[0  , dy],[0  ,  0]]
+        # quadrant2 = cells + [[0 , dy],[0 ,  0],[-dx, dy],[-dx,  0]]
+        # quadrant3 = cells + [[0 ,  0],[0 ,-dy],[-dx,  0],[-dx,-dy]]
+        # quadrant4 = cells + [[dx,  0],[dx,-dy],[0  ,  0],[0  ,-dy]]
     
-        return np.vstack((quadrant1,quadrant2,quadrant3,quadrant4))
+        return (np.transpose(np.hstack((quadrant1,quadrant2,quadrant3,quadrant4)), [1,0,2])
+                ,(p0,p12,p13,p34,p24))
     
     def for_points5_wrapper_cached(self,cells,mag_cells,cell_depth):
         '''Function that subdivdes given cells, computes the magnification values for new points, merges the magnification values from \'mag_cells\' with the newly computed magnifcation values, and returns the magnification values and cells where a critical curve was detected.'''
                 
-        subdivided_cells = self.subdivide_cells(cells,cell_depth)
+        subdivided_cells, points_lists = self.subdivide_cells(cells,cell_depth)
         
-        q1,q2,q3,q4 = np.split(subdivided_cells,4) #need the points for each quadrant
+        p0,p12,p13,p34,p24 = points_lists
+                        
+        need_mag = np.transpose(np.vstack(points_lists))
+        m0,m12,m13,m34,m24 = np.split(self.relation(need_mag[0],need_mag[1]),5)
         
-        q1,q2,q3,q4 = [np.delete(q,i,axis=1) for q,i in zip([q1,q2,q3,q4],[3,1,0,2])] # remove the cells that stay the same
-        
-        m1,m2,m3,m4 = [self.mag_of_cells(q) for q in [q1,q2,q3,q4]] # mag of points above
-        
-        c1,c2,c3,c4 = mag_cells.T #cache of old mag values (did not change)
-        
-        mag_combined = np.vstack([np.insert(m,i,c,axis=1) for m,i,c in zip([m1,m2,m3,m4],[3,1,0,2],[c4,c2,c1,c3])]) #combine old values with newly calculated values
-        
+        m1,m2,m3,m4 = mag_cells.T #cache of old mag values (did not change)
+                
+        m_quadrant1 = [m0,m24,m34,m4]
+        m_quadrant2 = [m12,m2,m0,m24]
+        m_quadrant3 = [m1,m12,m13,m0]
+        m_quadrant4 = [m13,m0,m3,m34]
+
+        mag_combined = np.transpose(np.hstack((m_quadrant1,m_quadrant2,m_quadrant3,m_quadrant4)))
+                
         mag_change_mask = self.cell_mag_change(mag_combined) #which cells had a change in magnification
         
         # return mag values of selected cells (used for the next level in gridding) and the cells themselves that had a mag change

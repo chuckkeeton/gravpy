@@ -35,4 +35,7 @@ if callgraph:
 else:
     example = gravlens(pcarargs,ppolargs2,pmodelargs3,image=pimage, include_caustics=True )
     example.run()
-    print "%d points evaluated" % example.num_eval 
+    print "%d points evaluated" % example.num_eval
+    print "%d points in cache " % len(example.cache.keys())
+
+    
