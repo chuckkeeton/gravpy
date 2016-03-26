@@ -2,6 +2,7 @@
 import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
+import functools 
 import numexpr as ne
 import trinterior as trint
 import plots
@@ -19,6 +20,7 @@ class gravlens:
         self.image = image
         self.recurse_depth = recurse_depth
         self.caustics_depth= caustics_depth
+        self.cache = {}
         
         self.num_eval = 0
         
@@ -52,7 +54,7 @@ class gravlens:
     
     def carmapping(self,x,y):
         '''mapping of cartesian coordinates from image to source plane'''
-        print "--Mapping Call--"
+        
         phiarr = self.potdefmag(x,y)
         phix,phiy = phiarr[1:3]
         
@@ -60,12 +62,60 @@ class gravlens:
     
     def magnification(self,x,y):
         '''returns the magnification of the points '''
-        print "--Magnification Call--"
+        
         phiarr = self.potdefmag(x,y)
         phixx,phiyy,phixy = phiarr[3:6]
         
         return (1-phixx)*(1-phiyy)-phixy**2
+
+    def memoize(obj):
+        
+
+        @functools.wraps(obj)
+        def memoizer(*args, **kwargs):
+            __self,xi,yi = args
+            cache = __self.cache
+            
+            #turn scalars into vectors of length 1
+            x = np.atleast_1d(xi) 
+            y = np.atleast_1d(yi) 
+
+            xc = []
+            yc = []
+            cach = []
+            for i in range(x.size):
+                key = str(x[i]) + " , " + str(y[i])
+                if key in cache:
+                    cach.append(i)
+                else:
+                    xc.append(x[i])
+                    yc.append(y[i])
+                        
+                
+            print "%d/%d in cache, calculating %d new value(s)" % (len(x)-len(xc),len(x),len(xc))
+
+            if len(xc) is not 0:
+                phiarray = np.transpose(obj(__self,xc,yc,**kwargs))
+
+            outarray = []
+            counter = 0
+            for i in range(x.size):
+                key = str(x[i]) + " , " + str(y[i])
+                if i in cach:
+                    outarray.append(cache[key])
+                else:
+                    outarray.append(phiarray[counter])
+                    cache[key] = phiarray[counter]
+                    counter += 1                    
+            
+            return np.transpose(outarray)
+
+            # print outarray.shape
+            # print x.size
+        
+        return memoizer
     
+    @memoize
     def potdefmag(self,xi,yi,numexpr=True):
         '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
         phi2Darray = []
@@ -76,7 +126,7 @@ class gravlens:
 
         self.num_eval += x.size
 
-        print "Evaluating %d points..." % x.size
+        print "Evaluating %d point(s)..." % x.size
 
         for mass_component in self.modelargs:
             

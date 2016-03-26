@@ -96,7 +96,7 @@ contains
           phiyy=0./0
           phixy=0./0
        else
-          temparr = nfw_integral(0.0d0,1.0d0,r,sint,cost,e,s)
+          temparr = nfw_integral(1.0d-8,1.0d0,r,sint,cost,e,s)
 
           pot  = front*(temparr(1)/2.)
           phix = front*(temparr(2)*x)
@@ -165,89 +165,64 @@ contains
   function nfw_integral(a,b,r,sint,cost,e,s) result(integral)
     use cui
     real(8), intent(in) :: a,b,r,sint,cost,e,s
-    real(8)  :: integral(6),error(6),prob(6)
-    integer  :: ndim,ncomp,userdata,nvec,flags,mineval,maxeval,key,spin
-    integer  :: nregions,neval,fail,res
+    real(8)  :: integral(6)
+    integer :: ndim,ncomp,nvec,mineval,maxeval,key
+    integer :: nregions,neval,fail,res
     real(8)  :: epsrel,epsabs
     real(8)  :: limits(1,2,1),AbsErr(6)
-    integer  :: rgtype(1)
+    integer  :: rgtype(1),ierr(6)
 
     
     ndim = 1
     ncomp = 6
-    userdata = 0
     nvec = 1
+    nregions = 1
     epsrel = 1d-3
-    epsabs = 1d-12
-    flags = 0
+    epsabs = 1d-9
     mineval = 0
     maxeval = 100000
-    key = 7 ! gives the fewest integrand evaluations (13-100k, 11-seg-fault, 9-319, 7-243)
-    spin = -1
-    
+    key = 0
     limits(1,1,1) = a
     limits(1,2,1) = b
     rgtype(1) = 1
-    fail = 0
-    
-    ! print *, 'Got to pre-integrate'
-    
-    ! call suave(ndim, ncomp, nfwIntegrand, userdata, nvec,&
-    !      epsrel, epsabs, flags, key,&
-    !      mineval, maxeval, 1000, 2, 25d0,&
-    !      "",spin,&
-    !      nregions,neval,fail,integral,error,prob)
-    ! call cuhre(ndim, ncomp, nfwIntegrand, userdata, nvec,&
-    !   epsrel, epsabs, flags, mineval, maxeval,&
-    !   key, "", spin,&
-    !   nregions, neval, fail, integral, error, prob)
+    fail = -1
 
-    call cubatr(ndim,ncomp,nfwIntegrand,ndim,limits,rgtype,integral,AbsErr,&
-          maxpts=maxeval,neval=neval, ifail=fail)
+    !call qng(nfwIntegrand, ncomp, a, b, epsabs, epsrel, integral, AbsErr, neval, ierr)
+    call cubatr(ndim,ncomp,nfwIntegrand,nregions,limits,rgtype,integral,AbsErr,&
+          key=key, maxpts=maxeval,neval=neval, ifail=fail)
          
-    ! print *, 'Fail: ', fail
-    ! print *, 'NumEval: ', neval
-    ! print *, 'Finished integrate' 
+    !print *, 'Fail: ', fail
+    !print *, 'NumEval: ', neval
+    !print *, 'Key: ', key
+    
 
-    
-    
     
   contains
-
-    !integer function nfwIntegrand(ndim, x, ncomp, res)
     function nfwIntegrand(ncomp,x) result(res)
-      !integer, intent(in) :: ndim
+    !function nfwIntegrand(x,ncomp) result(res)
       integer, intent(in) :: ncomp
       real(8), intent(in) :: x(:)
       real(8) :: res(ncomp)
       
-      real(8) :: q,t0,t1,t3,t5,mphiu,k,kp
-      ! real(8) :: u1,range
-      
-      ! range = b-a
-      ! u1     = a + (x(1)*range)
-
+      real(8) :: x1,q,t0,t1,t3,t5,mphiu,k,kp
+      x1 = x(1)
       q  = 1.0 - e
-      t0 = 1.0 - (1.0-q*q)*x(1)
+      t0 = 1.0 - (1.0-q*q)*x1
       t1 = 1.0/sqrt(t0)
       t3 = t1/t0
       t5 = t3/t0
 
-      call nfwkap(x(1),mphiu,k,kp)
+      call nfwkap(x1,mphiu,k,kp)
 
-      res = (/ t1*mphiu,t1*k,t3*k,t1*kp*x(1),t5*kp*x(1),t3*kp*x(1) /)
-      ! res = res*range
-      
-      ! nfwIntegrand = 0
-    
+      res = (/ t1*mphiu,t1*k,t3*k,t1*kp*x1,t5*kp*x1,t3*kp*x1 /)
+          
     end function nfwIntegrand
 
     subroutine nfwkap(u,mphiu,k,kp)
       real(8), intent(in) :: u
       real(8), intent(out):: mphiu,k,kp
 
-      real(8) :: q,t0,t1,t2,x2,dx,phir
-      real(8) :: F
+      real(8) :: q,t0,t1,t2,x2,dx,phir,F
 
       q  = 1.0-e
       t0 = cost*cost+sint*sint/(1.0-(1.0-q*q)*u)
@@ -273,8 +248,6 @@ contains
     end subroutine nfwkap
     
   end function nfw_integral
-
-
 
 end module nfwf
       

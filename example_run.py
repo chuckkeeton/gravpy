@@ -33,6 +33,6 @@ if callgraph:
         example = gravlens(pcarargs,ppolargs2,pmodelargs2, image=pimage, show_plot=False, include_caustics=False)
         example.run()
 else:
-    example = gravlens(pcarargs,ppolargs2,pmodelargs3,image=pimage, include_caustics=False )
+    example = gravlens(pcarargs,ppolargs2,pmodelargs3,image=pimage, include_caustics=True )
     example.run()
     print "%d points evaluated" % example.num_eval 
