@@ -3,13 +3,16 @@ import numpy as np
 from scipy.spatial import Delaunay 
 import scipy.optimize as op
 import functools 
-import numexpr as ne
+import logging
+import string
+
 import trinterior as trint
 import plots
 
+
 class gravlens:
         
-    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3,caustics_depth=8):
+    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=None,recurse_depth=3,caustics_depth=8,logging_level='notset'):
         self.carargs = carargs
         self.xspacing = carargs[0][2]
         self.yspacing = carargs[1][2]
@@ -17,12 +20,23 @@ class gravlens:
         self.modelargs = modelargs
         self.show_plot = show_plot
         self.include_caustics = include_caustics
-        self.image = image
+        self.image = np.random.uniform(-1,1,2)
         self.recurse_depth = recurse_depth
         self.caustics_depth= caustics_depth
         self.cache = {}
         
+        levels = {'critical':50, 'error':40, 'warning':30, 'info':20, 'debug':10, 'notset':0}
+        if isinstance(logging_level,str):
+            logging_level = levels[logging_level.lower()]
+        else:
+            assert isinstance(logging_level,int)
+            
+        logging.basicConfig(level=logging_level,format='%(message)s')
+        self.logger = logging.getLogger(__name__)
+        
         self.num_eval = 0
+        print ""
+
         
     def relation(self,x,y):
         '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
@@ -54,7 +68,7 @@ class gravlens:
     
     def carmapping(self,x,y):
         '''mapping of cartesian coordinates from image to source plane'''
-        print "******Mapping Call******"
+        self.logger.debug("******Mapping Call******")
         phiarr = self.potdefmag(x,y)
         phix,phiy = phiarr[1:3]
         
@@ -62,7 +76,7 @@ class gravlens:
     
     def magnification(self,x,y):
         '''returns the magnification of the points '''
-        print "***Magnification Call***"
+        self.logger.debug("***Magnification Call***")
         phiarr = self.potdefmag(x,y)
         phixx,phiyy,phixy = phiarr[3:6]
         
@@ -83,7 +97,7 @@ class gravlens:
             yc = []
             cach = set() # use bloom filter if this gets too large
             for i in xrange(x.size):
-                key = str(x[i]) + " , " + str(y[i])
+                key = make_key(x[i],y[i])
                 if key in cache:
                     cach.add(i)
                 else:
@@ -91,27 +105,29 @@ class gravlens:
                     yc.append(y[i])
                         
                 
-            print "%d/%d in cache, calculating %d new value(s)" % (len(x)-len(xc),len(x),len(xc))
+            __self.logger.info("{:>13} in cache, calculating {:<8} new value(s)"
+                               .format(str(len(x)-len(xc)) + "/" + str(len(x)),len(xc)))
 
             if len(xc) is not 0:
                 phiarray = np.transpose(obj(__self,xc,yc,**kwargs))
 
             
             outarray = []
-            counter = 0
+            counter = iter(range(len(xc)))
             for i in xrange(x.size):
-                key = str(x[i]) + " , " + str(y[i])
+                key = make_key(x[i],y[i])
                 if i in cach:
                     outarray.append(cache[key])
                 else:
-                    outarray.append(phiarray[counter])
-                    cache[key] = phiarray[counter]
-                    counter += 1                    
+                    arr = phiarray[counter.next()]
+                    outarray.append(arr)
+                    cache[key] = arr
             
             return np.transpose(outarray)
 
-            # print outarray.shape
-            # print x.size
+        def make_key(x,y):
+            """Define the key string for the cache dictionary"""
+            return str(x) + " , " + str(y)
         
         return memoizer
     
@@ -126,7 +142,7 @@ class gravlens:
 
         self.num_eval += x.size
 
-        print "Evaluating %d point(s)..." % x.size
+        self.logger.debug("Evaluating %d point(s)..." % x.size)
 
         for mass_component in self.modelargs:
             
@@ -159,6 +175,7 @@ class gravlens:
                 
         if np.count_nonzero(output) == 0: #np.all doesn't catch the error
             raise ValueError("Magnification does not change across grid, change grid parameters so that critical curves are seen.")
+        
         else:
             return output
 
@@ -177,7 +194,20 @@ class gravlens:
         dy = self.yspacing/ 2**cell_depth
         
         #below code uses broadcasting to 'shrink' each cell into a fourth of its size, but still retaining one of its vertices. This happens four times, shrinking each time towards one of the four vertices, leaving four quarter cells that together make up the original cell.
-        
+        # The following code is not used, but helps illustrate what the output is
+        # quadrant1 = cells + [[dx, dy],[dx,  0],[0  , dy],[0  ,  0]]
+        # quadrant2 = cells + [[0 , dy],[0 ,  0],[-dx, dy],[-dx,  0]]
+        # quadrant3 = cells + [[0 ,  0],[0 ,-dy],[-dx,  0],[-dx,-dy]]
+        # quadrant4 = cells + [[dx,  0],[dx,-dy],[0  ,  0],[0  ,-dy]]
+
+        """
+        The following code computes the intermediate points (p0,p24,p12,p34,p13) and then combines them into the four quadrants.
+        p2---p24--p4         |
+        |    |    |      II  |  I
+        p12--p0--p34    -----|-----
+        |    |    |      III |  IV
+        p1--p13---p3         |
+        """
         p1,p2,p3,p4 = np.transpose(cells,[1,0,2])
         p24 = p4 + [-dx,  0]
         p12 = p2 + [0  ,-dy]
@@ -185,31 +215,25 @@ class gravlens:
         p34 = p3 + [0  , dy]
         p0  = p1 + [ dx, dy]
 
-
         quadrant1 = [p0,p24,p34,p4]
         quadrant2 = [p12,p2,p0,p24]
         quadrant3 = [p1,p12,p13,p0]
         quadrant4 = [p13,p0,p3,p34]
-        # quadrant1 = cells + [[dx, dy],[dx,  0],[0  , dy],[0  ,  0]]
-        # quadrant2 = cells + [[0 , dy],[0 ,  0],[-dx, dy],[-dx,  0]]
-        # quadrant3 = cells + [[0 ,  0],[0 ,-dy],[-dx,  0],[-dx,-dy]]
-        # quadrant4 = cells + [[dx,  0],[dx,-dy],[0  ,  0],[0  ,-dy]]
-    
+        
         return (np.transpose(np.hstack((quadrant1,quadrant2,quadrant3,quadrant4)), [1,0,2])
-                ,(p0,p12,p13,p34,p24))
+                ,(p0,p12,p13,p34,p24)) # need these for computing magnification values
     
     def for_points5_wrapper_cached(self,cells,mag_cells,cell_depth):
         '''Function that subdivdes given cells, computes the magnification values for new points, merges the magnification values from \'mag_cells\' with the newly computed magnifcation values, and returns the magnification values and cells where a critical curve was detected.'''
                 
         subdivided_cells, points_lists = self.subdivide_cells(cells,cell_depth)
         
-        p0,p12,p13,p34,p24 = points_lists
-                        
-        need_mag = np.transpose(np.vstack(points_lists))
+        need_mag = np.transpose(np.vstack(points_lists)) # need x,y values
         m0,m12,m13,m34,m24 = np.split(self.relation(need_mag[0],need_mag[1]),5)
         
-        m1,m2,m3,m4 = mag_cells.T #cache of old mag values (did not change)
-                
+        m1,m2,m3,m4 = mag_cells.T # old mag values (did not change)
+
+        # look in subdivide_cells() for this recipe
         m_quadrant1 = [m0,m24,m34,m4]
         m_quadrant2 = [m12,m2,m0,m24]
         m_quadrant3 = [m1,m12,m13,m0]
@@ -220,9 +244,10 @@ class gravlens:
         mag_change_mask = self.cell_mag_change(mag_combined) #which cells had a change in magnification
         
         # return mag values of selected cells (used for the next level in gridding) and the cells themselves that had a mag change
-        return [np.compress(mag_change_mask,mag_combined,axis=0),np.compress(mag_change_mask,subdivided_cells,axis=0)]
+        return [np.compress(mag_change_mask,mag_combined,axis=0),
+                np.compress(mag_change_mask,subdivided_cells,axis=0)]
     
-    def points5(self,xran,yran):#,caustics_mode=False):
+    def points5(self,xran,yran):
         '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
                 
         x = xran[0:-1]
@@ -373,6 +398,9 @@ class gravlens:
         if self.show_plot:
             self.plot()
 
+        self.logger.info("%d points evaluated" % self.num_eval)
+        self.logger.info("%d points in cache " % len(self.cache.keys()))
+
     def validate_arguments(self):
         if not np.array(self.carargs).shape==(2,3):
             raise AssertionError("'carargs' are not of the correct shape")
@@ -383,7 +411,7 @@ class gravlens:
 
         
     def plot(self):
-
+ 
         [xlowerend, xupperend, xspacing],[ylowerend,yupperend,yspacing] = self.carargs
         
         plots.source_image_planes(
