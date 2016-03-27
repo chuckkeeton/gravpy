@@ -1,0 +1,1 @@
+f2py --fcompiler=intelem --opt='-fast' -c sief.f90 -m sief

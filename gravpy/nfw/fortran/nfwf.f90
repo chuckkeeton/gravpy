@@ -2,17 +2,6 @@
 module nfwf
   implicit none
   
-  ! interface
-  !    subroutine hcubature(ncomp, integrand, fdata, ndim, a, b, maxeval, epsabs, epsrel, norm, integral, errors) 
-  !      !use iso_c_binding
-  !      integer :: ncomp, ndim, maxeval
-  !      procedure(), pointer, intent(in)  :: integrand
-  !      real*8, pointer :: norm, fdata
-  !      real*8 :: a(*), b(*), epsabs, epsrel, integral(*), errors(*)
-
-  !    end subroutine hcubature
-  !end interface
-  
 contains
 
   subroutine nfw(res,x,y,modelargs,len)
@@ -155,7 +144,7 @@ contains
     real(8), intent(in) :: a,b,r,sint,cost,e,s
     real(8)  :: integral(6)
     integer  :: ndim,ncomp,maxeval,key,nregions,neval,fail
-    integer  :: rgtype(1),ierr(6)
+    integer  :: rgtype(1)
     real(8)  :: epsrel,epsabs
     real(8)  :: limits(1,2,1),AbsErr(6)
     

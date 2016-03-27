@@ -12,11 +12,10 @@ contains
 
     integer :: i
 
-    ! $OMP PARALLEL DO
     do i=1,len
        call single_eval(res(:,i),x(i),y(i),modelargs)
     enddo
-    ! $OMP END PARALLEL DO
+
     
   end subroutine general
 
@@ -29,8 +28,8 @@ contains
     real(8) :: b,x0,y0,e,te,s,a
     real(8) :: r,cost,sint,front,pot,phir,phir_r,phirr,phix,phiy,phixx,phiyy,phixy,temparr(6)
 
-    external dpsi, hyp
-    real(8) :: dpsi, hypr, hypim
+    external digamma, hyp
+    real(8) :: digamma, ifault, hypr, hypim
     
     b  = modelargs(1)
     x0 = modelargs(2)
@@ -45,8 +44,8 @@ contains
        cost = x/r
        sint = y/r
     else
-       cost = 1.0
-       sint = 0.0
+       res = (/ 0.,0.,0.,0.,0.,0. /) / 0
+       return
     endif
 
     front = (1-e)/2.0*b**(2.0-a)
@@ -74,7 +73,7 @@ contains
        if (abs(s) <= 2.0*r) then 
           call hyp(-(s*s)/(r*r),-0.5*a,-0.5*a,1.0-0.5*a,hypr,hypim)
           pot = hypr* b*b*(r/b)**a/(a*a)
-          pot = pot - b*b*(s/b)**a/a*(log(r/s)+0.5*(0.577216-dpsi(-0.5*a)))
+          pot = pot - b*b*(s/b)**a/a*(log(r/s)+0.5*(0.577216-digamma(-0.5*a,ifault)))
 
           if (abs(a) > 0.01) then
              pot = pot* a
@@ -118,20 +117,36 @@ contains
   end function alpha0phir
 
   
-  function alpha0phir_integral(lower,upper,s,a) result(val)
+  function alpha0phir_integral(lower,upper,s,a) result(integral)
+    use cui
     real(8), intent(in) :: lower,upper,s,a
-    real(8) :: val
+    real(8)  :: integral
+    integer  :: ndim,maxeval,key,neval,fail
+    integer  :: rgtype
+    real(8)  :: epsrel,epsabs
+    real(8)  :: limits(1,2),abserr
 
-    real(8) :: err
-    integer :: ierr
+    ndim = 1
+    epsrel = 1d-3
+    epsabs = 1d-9
+    maxeval = 100000
+    key = 0
+    limits(1,1) = lower
+    limits(1,2) = upper
+    rgtype = 1
+    fail = -1
 
+    call cubatr(ndim,f,limits,rgtype,integral,abserr,&
+         key=key, maxpts=maxeval,neval=neval, ifail=fail)
     
-    call dgaus8 (f,lower,upper,err,val,ierr)
 
   contains
-    function f(r) result(res)
-      real(8), intent(in) :: r
-      real(8) :: res
+    function f(ncomp,x) result(res)
+      real(8), intent(in) :: x(:)
+      integer, intent(in) :: ncomp
+      real(8) :: res(ncomp),r
+      r = x(1)
+      
       if (r/s < 1.0e-4) then
          res = r*s**(a-2.0)
       else if (a==0.0) then
@@ -144,21 +159,38 @@ contains
   end function alpha0phir_integral
 
 
-  function alpha_integral(lower,upper,r,e,sint,cost,s,a) result(out)
+  function alpha_integral(lower,upper,r,e,sint,cost,s,a) result(integral)
+    use cui
     real(8), intent(in) :: lower,upper,r,e,sint,cost,s,a
-    real(8) :: out(6)
+    real(8)  :: integral(6)
+    integer  :: ndim,ncomp,maxeval,key,nregions,neval,fail
+    integer  :: rgtype(1)
+    real(8)  :: epsrel,epsabs
+    real(8)  :: limits(1,2,1),abserr(6)
 
-    real(8) :: err
-    integer :: ierr
-    
-    call dgaus8 (f,lower,upper,err,out,ierr)
-    
+    ndim = 1
+    ncomp = 6
+    nregions = 1
+    epsrel = 1d-3
+    epsabs = 1d-9
+    maxeval = 100000
+    key = 0
+    limits(1,1,1) = lower
+    limits(1,2,1) = upper
+    rgtype(1) = 1
+    fail = -1
+
+    call cubatr(ndim,ncomp,f,nregions,limits,rgtype,integral,abserr,&
+         key=key, maxpts=maxeval,neval=neval, ifail=fail)
+
   contains
-    function f(u) result(res)
-      real(8), intent(in) :: u
-      real(8) ::  res(6)
+    function f(ncomp,x) result(res)
+      real(8), intent(in) :: x(:)
+      integer, intent(in) :: ncomp
+      real(8) ::  res(ncomp)
       
-      real(8) q,t0,t1,t3,t5,t6,t7,mphiu,k,kp
+      real(8) :: u,q,t0,t1,t3,t5,t6,t7,mphiu,k,kp
+      u = x(1)
       
       q  = 1.0-e
       t0 = 1.0-(1.0-q*q)*u

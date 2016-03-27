@@ -1,13 +1,17 @@
 # Compiled python modules.
 *.pyc
 *.pyx
+
 # all compiled sources
 *.o
 *.so
 *.mod
 
-IPython notebooks
+# IPython notebooks
 *.ipynb
+
+# Images not added manually
+*.png
 
 # Setuptools distribution folder.
 /dist/

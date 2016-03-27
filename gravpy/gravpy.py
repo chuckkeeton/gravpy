@@ -12,7 +12,7 @@ import plots
 
 class gravlens:
         
-    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=None,recurse_depth=3,caustics_depth=8,logging_level='notset'):
+    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=None,recurse_depth=3,caustics_depth=8,logging_level='info'):
         self.carargs = carargs
         self.xspacing = carargs[0][2]
         self.yspacing = carargs[1][2]
@@ -24,6 +24,7 @@ class gravlens:
         self.recurse_depth = recurse_depth
         self.caustics_depth= caustics_depth
         self.cache = {}
+
         
         levels = {'critical':50, 'error':40, 'warning':30, 'info':20, 'debug':10, 'notset':0}
         if isinstance(logging_level,str):

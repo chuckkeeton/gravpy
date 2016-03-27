@@ -1,0 +1,2 @@
+f2py --fcompiler=intelem --opt='-fast' -lcubpack -c nfwf.f90 -m nfwf
+! make sure to have cui.mod from CUBPACK in source dir as well
