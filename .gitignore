@@ -1,0 +1,16 @@
+# Compiled python modules.
+*.pyc
+*.pyx
+# all compiled sources
+*.o
+*.so
+*.mod
+
+IPython notebooks
+*.ipynb
+
+# Setuptools distribution folder.
+/dist/
+
+# Python egg metadata, regenerated from source files by setuptools.
+/*.egg-info

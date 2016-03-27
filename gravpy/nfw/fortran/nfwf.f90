@@ -51,8 +51,8 @@ contains
        cost = x/r
        sint = y/r
     else
-       cost = 1.0
-       sint = 0.0
+       res = (/ 0.,0.,0.,0.,0.,0. /) / 0
+       return
     endif
 
     front = (1.-e)*b
@@ -88,23 +88,15 @@ contains
        pot = pot * 2*front*s*s
 
     else
-       if (x == 0d0 .and. y== 0d0) then
-          pot = 0
-          phix= 0./0
-          phiy= 0./0
-          phixx=0./0
-          phiyy=0./0
-          phixy=0./0
-       else
-          temparr = nfw_integral(1.0d-8,1.0d0,r,sint,cost,e,s)
+       temparr = nfw_integral(1.0d-8,1.0d0,r,sint,cost,e,s)
 
-          pot  = front*(temparr(1)/2.)
-          phix = front*(temparr(2)*x)
-          phiy = front*(temparr(3)*y)
-          phixx= front*(temparr(2)+2.*x*x*temparr(4))
-          phiyy= front*(temparr(3)+2.*y*y*temparr(5))
-          phixy= front*(2.*x*y*temparr(6))
-       endif 
+       pot  = front*(temparr(1)/2.)
+       phix = front*(temparr(2)*x)
+       phiy = front*(temparr(3)*y)
+       phixx= front*(temparr(2)+2.*x*x*temparr(4))
+       phiyy= front*(temparr(3)+2.*y*y*temparr(5))
+       phixy= front*(2.*x*y*temparr(6))
+
     endif
 
     res = (/ pot,phix,phiy,phixx,phiyy,phixy /)
@@ -114,13 +106,11 @@ contains
   function nfw0phir(x) result(res)
     real(8), intent(in) :: x
     real(8) :: res
-
         
     if (x==0.0d0) then
        res = 0.0d0
        return
     endif
-
 
     if (x < 1.0e-4) then
        res = -2.0*(x*(1.0+0.75*x*x)*log(0.5*x)+0.5*x*(1.0+0.875*x*x))
@@ -160,34 +150,27 @@ contains
 
   end function nfwFfunc
 
-  
-  
   function nfw_integral(a,b,r,sint,cost,e,s) result(integral)
-    use cui
+    use cui                     
     real(8), intent(in) :: a,b,r,sint,cost,e,s
     real(8)  :: integral(6)
-    integer :: ndim,ncomp,nvec,mineval,maxeval,key
-    integer :: nregions,neval,fail,res
+    integer  :: ndim,ncomp,maxeval,key,nregions,neval,fail
+    integer  :: rgtype(1),ierr(6)
     real(8)  :: epsrel,epsabs
     real(8)  :: limits(1,2,1),AbsErr(6)
-    integer  :: rgtype(1),ierr(6)
-
     
     ndim = 1
     ncomp = 6
-    nvec = 1
     nregions = 1
     epsrel = 1d-3
     epsabs = 1d-9
-    mineval = 0
     maxeval = 100000
     key = 0
     limits(1,1,1) = a
     limits(1,2,1) = b
     rgtype(1) = 1
     fail = -1
-
-    !call qng(nfwIntegrand, ncomp, a, b, epsabs, epsrel, integral, AbsErr, neval, ierr)
+    
     call cubatr(ndim,ncomp,nfwIntegrand,nregions,limits,rgtype,integral,AbsErr,&
           key=key, maxpts=maxeval,neval=neval, ifail=fail)
          
@@ -195,16 +178,15 @@ contains
     !print *, 'NumEval: ', neval
     !print *, 'Key: ', key
     
-
-    
   contains
     function nfwIntegrand(ncomp,x) result(res)
-    !function nfwIntegrand(x,ncomp) result(res)
+      
       integer, intent(in) :: ncomp
       real(8), intent(in) :: x(:)
       real(8) :: res(ncomp)
       
       real(8) :: x1,q,t0,t1,t3,t5,mphiu,k,kp
+      
       x1 = x(1)
       q  = 1.0 - e
       t0 = 1.0 - (1.0-q*q)*x1

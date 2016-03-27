@@ -3,11 +3,12 @@ from math import sin,cos,pi
 import numpy as np
 from functools import wraps
 
-import siepy,alphapy
+from .sie.python import siepy
+from .alpha.python import alphapy
 # f2py modules imported below, clunky pathing due to fortran modules, full function path is fmodel.fmodel.routine
-from sief import sief
-from alphaf import alphaf 
-from nfwf import nfwf
+from .sie.fortran.sief import sief
+from .alpha.fortran.alphaf import alphaf 
+from .nfw.fortran.nfwf import nfwf
 
 class baseModel:
     __metaclass__ = abc.ABCMeta
