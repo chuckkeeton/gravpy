@@ -8,22 +8,43 @@ def memoize(func):
     
     If running on Python 3.2+, should use
     functools.lru_cache() instead of this.
+
+    Currently, running with NFW(2, 0, 0, 0, 0, 0.5, 1, 0.5),
+    the total size of the cache dictionaries (results)
+    are as follows:
+        i: (not tested)
+        j0, j1, k0, k1, k2: 4547487B (~4.3MB) each
+    The hits as misses were as follows:
+            func   |  hits  |  misses  |  hit%
+        -------------------------------------
+        j0, j1        61482    13826      81.6%
+        k0, k1, k2    23828    13826      63.2%
+    
     """
     results = {}
+    cacheinfo = {
+        'hits': 0,
+        'misses': 0,
+    }
     @wraps(func)
     def wrapper(*args, **kwargs):
         key = (func.func_name,) + tuple(args) + tuple(kwargs.iteritems())
         if key in results:
-            # print "cache hit {0}".format(key)
+            cacheinfo['hits'] = cacheinfo['hits'] + 1
             return results[key]
+        cacheinfo['misses'] = cacheinfo['misses'] + 1
         result = func(*args, **kwargs)
         results[key] = result
         return result
+    def getcacheinfo():
+        from testutil import total_size
+        return cacheinfo['hits'], cacheinfo['misses'], total_size(results)
+    wrapper.getcacheinfo = getcacheinfo
     return wrapper
 
 
 class Integrator(object):
-    """Integrator object to solve integrals
+    """Integrator object to solve model integrals
     
     This object can be used to solve the integrals for
     phi, phi_x, phi_y, phi_xx, phi_yy, and phi_xy.
@@ -40,8 +61,7 @@ class Integrator(object):
     
     def phi(self, x, y):
         """Lensing potential"""
-        local_i = self.i(phi_r)
-        result, err = local_i(self, x, y)
+        result, err = self.i(x, y)
         return (self.q / 2.0) * result
 
     def phi_x(self, x, y):
@@ -78,10 +98,11 @@ class Integrator(object):
     def xi_u_squared(self, u, x, y):
         return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - self.q ** 2) * u))))
 
-    def i(self, phi_r):
+    @memoize
+    def i(self, x, y):
         def integrand(u, x, y):
             return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi(u, x, y)) / (1.0 - (1.0 - self.q**2) * u)**0.5
-        return lambda self, x, y: quad(integrand, 0, 1, args=(x, y))
+        return quad(integrand, 0, 1, args=(x, y))
 
     @memoize
     def j0(self, x, y):

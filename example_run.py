@@ -39,3 +39,9 @@ if callgraph:
 else:
     example = Gravpy(pcarargs, ppolargs, pmodelargs)
     example.run()
+    # print pmodelargs[0].integrator.i.getcacheinfo()
+    # print pmodelargs[0].integrator.j0.getcacheinfo()
+    # print pmodelargs[0].integrator.j1.getcacheinfo()
+    # print pmodelargs[0].integrator.k0.getcacheinfo()
+    # print pmodelargs[0].integrator.k1.getcacheinfo()
+    # print pmodelargs[0].integrator.k2.getcacheinfo()
