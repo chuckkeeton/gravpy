@@ -1,79 +1,168 @@
+from functools import wraps
 from scipy.integrate import quad
+from numpy import sqrt
 
 
-def phi_x(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    j0 = jn(0)
-    result = j0(x, y, q, alpha, b, s)
-    return (q * x * result[0]), result[1]
+def memoize(func):
+    """Simple decorator to memoize
+    
+    If running on Python 3.2+, should use
+    functools.lru_cache() instead of this.
+
+    Currently, running with NFW(2, 0, 0, 0, 0, 0.5, 1, 0.5),
+    the total size of the cache dictionaries (results)
+    are as follows:
+        i: (not tested)
+        j0, j1, k0, k1, k2: 4547487B (~4.3MB) each
+    The hits as misses were as follows:
+            func   |  hits  |  misses  |  hit%
+        -------------------------------------
+        j0, j1        61482    13826      81.6%
+        k0, k1, k2    23828    13826      63.2%
+    
+    """
+    results = {}
+    cacheinfo = {
+        'hits': 0,
+        'misses': 0,
+    }
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        key = (func.func_name,) + tuple(args) + tuple(kwargs.iteritems())
+        if key in results:
+            cacheinfo['hits'] = cacheinfo['hits'] + 1
+            return results[key]
+        cacheinfo['misses'] = cacheinfo['misses'] + 1
+        result = func(*args, **kwargs)
+        results[key] = result
+        return result
+    def getcacheinfo():
+        from testutil import total_size
+        return cacheinfo['hits'], cacheinfo['misses'], total_size(results)
+    wrapper.getcacheinfo = getcacheinfo
+    return wrapper
 
 
-def phi_y(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    j1 = jn(1)
-    result = j1(x, y, q, alpha, b, s)
-    return (q * x * result[0]), result[1]
+class Integrator(object):
+    """Integrator object to solve model integrals
+    
+    This object can be used to solve the integrals for
+    phi, phi_x, phi_y, phi_xx, phi_yy, and phi_xy.
+    It will automatically cache results from I, J and K integrals
+    in order to minimize the number of computations, at the cost
+    of space utilized.
+    """
+
+    def __init__(self, q, kappa, kappa_prime, phi_r):
+        self.q = q
+        self.kappa = kappa
+        self.kappa_prime = kappa_prime
+        self.phi_r = phi_r
+    
+    def phi(self, x, y):
+        """Lensing potential"""
+        result, err = self.i(x, y)
+        return (self.q / 2.0) * result
+
+    def phi_x(self, x, y):
+        result, err = self.j0(x, y)
+        return self.q * x * result
+
+    def phi_y(self, x, y):
+        result, err = self.j1(x, y)
+        return self.q * x * result
+
+    def phi_xx(self, x, y):
+        result_k, err_k = self.k0(x, y)
+        result_j, err_j = self.j0(x, y)
+        return 2.0 * self.q * x ** 2.0 * result_k + self.q * result_j
+
+    def phi_yy(self, x, y):
+        result_k, err_k = self.k2(x, y)
+        result_j, err_j = self.j1(x, y)
+        return 2.0 * self.q * y ** 2.0 * result_k + self.q * result_j
+
+    def phi_xy(self, x, y):
+        result, err = self.k1(x, y)
+        return 2.0 * self.q * x * y * result
+
+    def xi(self, x, y):
+        return sqrt(xi_squared(x, y, self.q))
+
+    def xi_squared(self, x, y):
+        return x**2 + (y**2 / self.q**2)
+
+    def xi_u(self, u, x, y):
+        return sqrt(xi_u_squared(u, x, y, self.q))
+
+    def xi_u_squared(self, u, x, y):
+        return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - self.q ** 2) * u))))
+
+    @memoize
+    def i(self, x, y):
+        def integrand(u, x, y):
+            return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi(u, x, y)) / (1.0 - (1.0 - self.q**2) * u)**0.5
+        return quad(integrand, 0, 1, args=(x, y))
+
+    @memoize
+    def j0(self, x, y):
+        local_j0 = self.jn(0)
+        return local_j0(x, y)
+
+    @memoize
+    def j1(self, x, y):
+        local_j1 = self.jn(1)
+        return local_j1(x, y)
+
+    @memoize
+    def k0(self, x, y):
+        local_k0 = self.kn(0)
+        return local_k0(x, y)
+
+    @memoize
+    def k1(self, x, y):
+        local_k1 = self.kn(1)
+        return local_k1(x, y)
+
+    @memoize
+    def k2(self, x, y):
+        local_k2 = self.kn(2)
+        return local_k2(x, y)
+
+    def jn(self, n):
+        def integrand(u, x, y):
+            return self.kappa(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q**2) * u)**(n + 0.5))
+        return lambda x, y: quad(integrand, 0, 1, args=(x, y))
+
+    def kn(self, n):
+        def integrand(u, x, y):
+            return u * self.kappa_prime(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q**2) * u)**(n + 0.5))
+        return lambda x, y: quad(integrand, 0, 1, args=(x, y))
+
+# if __name__ == '__main__':
+#     def sple_kappa(w, alpha, b, s):
+#         # w = xi**2,
+#         # so xi**2 is not necessary
+#         return (0.5 * b ** (2 - alpha)) / ((s ** 2 + w) ** (1 - (alpha / 2.0)))
 
 
-def phi_xx(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k0 = kn(0)
-    j0 = jn(0)
-    result_k0 = k0(x, y, q, alpha, b, s)
-    result_j0 = j0(x, y, q, alpha, b, s)
-    return 2.0 * q * x ** 2.0 * result_k0[0] + q * result_j0[0]
+#     def sple_kappa_prime(w, alpha, b, s):
+#         # the derivative of kappa over w (xi**2)
+#         return 0.25 * (alpha - 2.0) * b ** (2.0 - alpha) * (s ** 2.0 + w) ** ((alpha / 2.0) - 2.0)
+    
+#     ###########
+#     # analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
 
+#     # print phi_x(1, 1)
+#     # print phi_y(1, 1)
 
-def phi_yy(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k2 = kn(2)
-    j1 = jn(1)
-    result_k2 = k2(x, y, q, alpha, b, s)
-    result_j1 = j1(x, y, q, alpha, b, s)
-    return 2.0 * q * y ** 2.0 * result_k2[0] + q * result_j1[0]
+#     # print phi_xx(1, 1)
+#     # print analytic_answers[3]
 
+#     # print phi_yy(1, 1)
+#     # print analytic_answers[4]
 
-def phi_xy(x, y, q=0.5, alpha=1.0, b=2.0, s=0.01):
-    k1 = kn(1)
-    result = k1(x, y, q, alpha, b, s)
-    return 2.0 * q * x * y * result[0]
-
-
-def kappa(w, alpha, b, s):
-    # w = xi**2,
-    # so xi**2 is not necessary
-    return (0.5 * b ** (2 - alpha)) / ((s ** 2 + w) ** (1 - (alpha / 2.0)))
-
-
-def kappa_prime(w, alpha, b, s):
-    # the derivative of kappa over w (xi**2)
-    return 0.25 * (alpha - 2.0) * b ** (2.0 - alpha) * (s ** 2.0 + w) ** ((alpha / 2.0) - 2.0)
-
-
-def xi_squared(u, x, y, q):
-    return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - q ** 2) * u))))
-
-
-def jn(n):
-    def integrand(u, x, y, q, alpha, b, s):
-        return kappa(xi_squared(u, x, y, q), alpha, b, s) / ((1.0 - (1.0 - q ** 2) * u) ** (n + 0.5))
-    return lambda x, y, q, alpha, b, s: quad(integrand, 0, 1, args=(x, y, q, alpha, b, s))
-
-
-def kn(n):
-    def integrand(u, x, y, q, alpha, b, s):
-        return u * kappa_prime(xi_squared(u, x, y, q), alpha, b, s) / ((1.0 - (1.0 - q ** 2) * u) ** (n + 0.5))
-    return lambda x, y, q, alpha, b, s: quad(integrand, 0, 1, args=(x, y, q, alpha, b, s))
-
-    ###########
-    # analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
-
-    # print phi_x(1, 1)
-    # print phi_y(1, 1)
-
-    # print phi_xx(1, 1)
-    # print analytic_answers[3]
-
-    # print phi_yy(1, 1)
-    # print analytic_answers[4]
-
-    # print phi_xy(1, 1)
-    # print analytic_answers[5]
-    ###########
-    #
+#     # print phi_xy(1, 1)
+#     # print analytic_answers[5]
+#     ###########
+#     #
