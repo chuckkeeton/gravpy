@@ -18,13 +18,14 @@ pmodelargs = [
 
 # center position (coordinate pair), outer radius, number of divisions in radius,
 # number of divisions in angle (for 360 degrees)
-ppolargs = [[(-0.45, -0.5), 0.9, 10, 42],
-            [(1.5, 1.5), 0.5, 10, 42]
-            ]
-pmodelargs2 = [Alpha(1, 0, 0, 0.0, 0, 0.001, -1)]
-ppolargs2 = [[(0, 0), 0.9, 10, 42]]
-pcarargs = [[-2.5, 2.5, 0.5],
-            [-2.5, 2.5, 0.5]]  # lower bound, upper bound, initial spacing (two sets--for x and y axes)
+ppolargs = [
+        [(0.0, 0.0), 0.9, 10, 42],
+    ]
+# lower bound, upper bound, initial spacing (two sets--for x and y axes)
+pcarargs = [
+        [-2.5, 2.5, 0.5],
+        [-2.5, 2.5, 0.5]
+    ]
 pimage = [0.25, 0.25]  # image location -if- we want to specify
 ##############################
 
