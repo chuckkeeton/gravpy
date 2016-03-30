@@ -1,10 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
+*.py[codx]
 *$py.class
-
-# C extensions
-*.so
 
 # Distribution / packaging
 .Python
@@ -70,3 +67,20 @@ target/
 
 # IntelliJ
 .idea/
+
+# all compiled sources
+*.o
+*.so
+*.mod
+
+# IPython notebooks
+*.ipynb
+
+# Images not added manually
+*.png
+
+# Setuptools distribution folder.
+/dist/
+
+# Python egg metadata, regenerated from source files by setuptools.
+/*.egg-info
