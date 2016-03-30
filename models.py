@@ -3,7 +3,7 @@ import pysie, pyalpha
 from math import sin, cos, pi
 import numpy as np
 from functools import wraps
-import integration
+from integration import Integrator
 from collections import Iterable
 
 
@@ -117,6 +117,7 @@ class NFW(BaseModel):
         self.ks = ks
         self.rs = rs
         self.q = 1.0 - self.e
+        self.integrator = Integrator(self.q, self.kappa, self.kappa_prime, self.phi_r)
 
     @standard_frame_rotation
     def phiarray(self, x, y, *args, **kwargs):
@@ -128,11 +129,11 @@ class NFW(BaseModel):
         for i, (local_x, local_y) in enumerate(zip(x, y)):
             print "on {0} out of {1}".format(i, len(x))
             potential.append(0)
-            phix.append(integration.phi_x(local_x, local_y, self.q, self.kappa))
-            phiy.append(integration.phi_y(local_x, local_y, self.q, self.kappa))
-            phixx.append(integration.phi_xx(local_x, local_y, self.q, self.kappa, self.kappa_prime))
-            phiyy.append(integration.phi_yy(local_x, local_y, self.q, self.kappa, self.kappa_prime))
-            phixy.append(integration.phi_xy(local_x, local_y, self.q, self.kappa_prime))
+            phix.append(self.integrator.phi_x(local_x, local_y))
+            phiy.append(self.integrator.phi_y(local_x, local_y))
+            phixx.append(self.integrator.phi_xx(local_x, local_y))
+            phiyy.append(self.integrator.phi_yy(local_x, local_y))
+            phixy.append(self.integrator.phi_xy(local_x, local_y))
         return np.array((potential, phix, phiy, phixx, phiyy, phixy))
 
     @staticmethod
