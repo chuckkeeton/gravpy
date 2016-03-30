@@ -127,7 +127,7 @@ class NFW(BaseModel):
         potential, phix, phiy, phixx, phiyy, phixy = [[] for i in xrange(6)]
         for i, (local_x, local_y) in enumerate(zip(x, y)):
             print "on {0} out of {1}".format(i, len(x))
-            potential.append(self.phi(0))
+            potential.append(0)
             phix.append(integration.phi_x(local_x, local_y, self.q, self.kappa))
             phiy.append(integration.phi_y(local_x, local_y, self.q, self.kappa))
             phixx.append(integration.phi_xx(local_x, local_y, self.q, self.kappa, self.kappa_prime))
@@ -137,12 +137,20 @@ class NFW(BaseModel):
 
     @staticmethod
     def funcF(x):
-        if x == 1.0:
-            return 1
+        dx = x**2 - 1.0
+        if abs(x) < 1e-2:
+            # series with O(x^6) error
+            log2x = np.log(2.0 / x)
+            return log2x + x**2 * (0.5 * log2x - 0.25) * x**4 * (0.375 * log2x - 0.21875)
+        elif abs(dx) < 1e-2:
+            # series with O(dx^6) error
+            return 1.0 - (dx / 3.0) + (dx**2 / 5.0) - (dx**3 / 7.0) + (dx**4 / 9.0) - (dx**5 / 11.0)
         elif x > 1.0:
-            return (1.0 / np.sqrt(x**2 - 1.0)) * np.arctan(np.sqrt(x**2 - 1.0))
+            tmp = np.sqrt(x**2 - 1.0)
+            return np.arctan(tmp) / tmp
         else:
-            return (1.0 / np.sqrt(1.0 - x**2)) * np.arctanh(1.0 - x**2)
+            tmp = np.sqrt(1.0 - x**2)
+            return np.arctanh(tmp) / tmp
 
     @staticmethod
     def funcF_prime(x):
