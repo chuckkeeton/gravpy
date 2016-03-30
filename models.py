@@ -126,8 +126,8 @@ class NFW(BaseModel):
             y = [y]
 
         potential, phix, phiy, phixx, phiyy, phixy = [[] for i in xrange(6)]
+        # print "calculating phiarray for ({0}, {1})".format(x, y)
         for i, (local_x, local_y) in enumerate(zip(x, y)):
-            print "on {0} out of {1}".format(i, len(x))
             potential.append(0)
             phix.append(self.integrator.phi_x(local_x, local_y))
             phiy.append(self.integrator.phi_y(local_x, local_y))

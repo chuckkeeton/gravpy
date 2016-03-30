@@ -14,7 +14,7 @@ def memoize(func):
     def wrapper(*args, **kwargs):
         key = (func.func_name,) + tuple(args) + tuple(kwargs.iteritems())
         if key in results:
-            print "cache hit {0}".format(key)
+            # print "cache hit {0}".format(key)
             return results[key]
         result = func(*args, **kwargs)
         results[key] = result
