@@ -1,8 +1,8 @@
 #!/usr/bin/python
 import numpy as np
-from scipy.spatial import Delaunay 
+from scipy.spatial import Delaunay
 import scipy.optimize as op
-import functools 
+import functools
 import logging
 import string
 
@@ -11,8 +11,8 @@ import plots
 
 
 class gravlens:
-        
-    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=None,recurse_depth=3,caustics_depth=8,logging_level='info'):
+
+    def __init__(self,carargs,polargs,modelargs,show_plot=True,include_caustics=True,image=np.random.uniform(-1,1,2),recurse_depth=3,caustics_depth=8,logging_level='info'):
         self.carargs = carargs
         self.xspacing = carargs[0][2]
         self.yspacing = carargs[1][2]
@@ -20,35 +20,35 @@ class gravlens:
         self.modelargs = modelargs
         self.show_plot = show_plot
         self.include_caustics = include_caustics
-        self.image = np.random.uniform(-1,1,2)
+        self.image = image
         self.recurse_depth = recurse_depth
         self.caustics_depth= caustics_depth
         self.cache = {}
 
-        
+
         levels = {'critical':50, 'error':40, 'warning':30, 'info':20, 'debug':10, 'notset':0}
         if isinstance(logging_level,str):
             logging_level = levels[logging_level.lower()]
         else:
             assert isinstance(logging_level,int)
-            
+
         logging.basicConfig(level=logging_level,format='%(message)s')
         self.logger = logging.getLogger(__name__)
-        
+
         self.num_eval = 0
         print ""
 
-        
+
     def relation(self,x,y):
         '''tells us if the point pair (x,y) is outside, inside, or on the critical curve'''
-        
+
         dif = self.magnification(x,y)
         return np.sign(dif) # -1 for inside, +1 for outside, 0 for exactly on
 
     @staticmethod
-    def polartocar(r,th):
-        '''convert polar coordinates to cartesian coordinates'''
-        r  = np.array(r)
+    def polartocar(r, th):
+        """convert polar coordinates to cartesian coordinates"""
+        r = np.array(r)
         th = np.array(th)
         
         return np.transpose(r*[np.cos(th),np.sin(th)])
@@ -72,27 +72,27 @@ class gravlens:
         self.logger.debug("******Mapping Call******")
         phiarr = self.potdefmag(x,y)
         phix,phiy = phiarr[1:3]
-        
+
         return np.transpose([x-phix,y-phiy])
-    
+
     def magnification(self,x,y):
         '''returns the magnification of the points '''
         self.logger.debug("***Magnification Call***")
         phiarr = self.potdefmag(x,y)
         phixx,phiyy,phixy = phiarr[3:6]
-        
+
         return (1-phixx)*(1-phiyy)-phixy**2
 
     def memoize(obj):
-        
+
         @functools.wraps(obj)
         def memoizer(*args, **kwargs):
             __self,xi,yi = args
             cache = __self.cache
-            
+
             #turn scalars into vectors of length 1
-            x = np.atleast_1d(xi) 
-            y = np.atleast_1d(yi) 
+            x = np.atleast_1d(xi)
+            y = np.atleast_1d(yi)
 
             xc = []
             yc = []
@@ -104,15 +104,15 @@ class gravlens:
                 else:
                     xc.append(x[i])
                     yc.append(y[i])
-                        
-                
+
+
             __self.logger.info("{:>13} in cache, calculating {:<8} new value(s)"
                                .format(str(len(x)-len(xc)) + "/" + str(len(x)),len(xc)))
 
             if len(xc) is not 0:
                 phiarray = np.transpose(obj(__self,xc,yc,**kwargs))
 
-            
+
             outarray = []
             counter = iter(range(len(xc)))
             for i in xrange(x.size):
@@ -123,15 +123,15 @@ class gravlens:
                     arr = phiarray[counter.next()]
                     outarray.append(arr)
                     cache[key] = arr
-            
+
             return np.transpose(outarray)
 
         def make_key(x,y):
             """Define the key string for the cache dictionary"""
             return str(x) + " , " + str(y)
-        
+
         return memoizer
-    
+
     @memoize
     def potdefmag(self,xi,yi,numexpr=True):
         '''The wrapper used to find the phi values given models' parameters. The output is (6,x) where x is the length of the x,y arguments given in the invocation. This command seeks out the correct module to contact for each model calculation.'''
@@ -147,7 +147,7 @@ class gravlens:
 
         for mass_component in self.modelargs:
             
-            phiarray = mass_component.phiarray(x,y,numexpr=numexpr) 
+            phiarray = mass_component.phiarray(x,y,numexpr=numexpr)
             phi2Darray.append(phiarray)
                 
         return np.sum(phi2Darray,axis=0)
@@ -169,14 +169,14 @@ class gravlens:
         '''Takes a list of magnification values of a list of cells and returns a boolean mask for which the magnification changes across a cell. Uses numpy vectorization.'''
         fir,sec,thr,frt = cells_mag.T
 
-        with np.errstate(invalid='ignore'): 
+        with np.errstate(invalid='ignore'):
             less1 = np.vstack((fir*sec,sec*frt,frt*thr,thr*fir)) < 1
-        
+
         output = np.any(less1,axis=0)
-                
+
         if np.count_nonzero(output) == 0: #np.all doesn't catch the error
             raise ValueError("Magnification does not change across grid, change grid parameters so that critical curves are seen.")
-        
+
         else:
             return output
 
@@ -220,18 +220,18 @@ class gravlens:
         quadrant2 = [p12,p2,p0,p24]
         quadrant3 = [p1,p12,p13,p0]
         quadrant4 = [p13,p0,p3,p34]
-        
+
         return (np.transpose(np.hstack((quadrant1,quadrant2,quadrant3,quadrant4)), [1,0,2])
                 ,(p0,p12,p13,p34,p24)) # need these for computing magnification values
-    
+
     def for_points5_wrapper_cached(self,cells,mag_cells,cell_depth):
         '''Function that subdivdes given cells, computes the magnification values for new points, merges the magnification values from \'mag_cells\' with the newly computed magnifcation values, and returns the magnification values and cells where a critical curve was detected.'''
-                
+
         subdivided_cells, points_lists = self.subdivide_cells(cells,cell_depth)
-        
+
         need_mag = np.transpose(np.vstack(points_lists)) # need x,y values
         m0,m12,m13,m34,m24 = np.split(self.relation(need_mag[0],need_mag[1]),5)
-        
+
         m1,m2,m3,m4 = mag_cells.T # old mag values (did not change)
 
         # look in subdivide_cells() for this recipe
@@ -241,31 +241,32 @@ class gravlens:
         m_quadrant4 = [m13,m0,m3,m34]
 
         mag_combined = np.transpose(np.hstack((m_quadrant1,m_quadrant2,m_quadrant3,m_quadrant4)))
-                
+
         mag_change_mask = self.cell_mag_change(mag_combined) #which cells had a change in magnification
-        
+
         # return mag values of selected cells (used for the next level in gridding) and the cells themselves that had a mag change
         return [np.compress(mag_change_mask,mag_combined,axis=0),
                 np.compress(mag_change_mask,subdivided_cells,axis=0)]
-    
+
     def points5(self,xran,yran):
         '''A vectorized approach to bulding a 'recursive' subgrid without recursion. Algorithm works by vectorizing each level of cell-size, handling each level in one complete calculation before proceeding to the next. '''
                 
         x = xran[0:-1]
         y = yran[0:-1]
-        xs, ys = np.tile(x,len(y)),np.repeat(y,len(x))
-    
-        grid_pairs = np.column_stack((np.tile(xran,len(yran)),np.repeat(yran,len(xran))))
-    
-        gridm_x_y = np.vstack((np.dstack((xs,xs,xs+self.xspacing,xs+self.xspacing)),np.dstack((ys,ys+self.yspacing,ys,ys+self.yspacing))))
-        cells = np.transpose(gridm_x_y,[1,2,0])
-    
+        xs, ys = np.tile(x, len(y)), np.repeat(y, len(x))
+
+        grid_pairs = np.column_stack((np.tile(xran, len(yran)), np.repeat(yran, len(xran))))
+
+        gridm_x_y = np.vstack((np.dstack((xs, xs, xs + self.xspacing, xs + self.xspacing)),
+                               np.dstack((ys, ys + self.yspacing, ys, ys + self.yspacing))))
+        cells = np.transpose(gridm_x_y, [1, 2, 0])
+
         # we don't want to subdivide the first iteration
         cells_mag = self.mag_of_cells(cells)
         mag_change_mask = self.cell_mag_change(cells_mag)
         
         cells_sel = np.compress(mag_change_mask,cells,axis=0) #equivalent to cells[mag_change_mask] but faster
-                
+
         cells_mag = np.compress(mag_change_mask,cells_mag,axis=0) # = cells_mag[mag_change_mask]
         output_pairs = []
         
@@ -276,18 +277,18 @@ class gravlens:
             
             #if not caustics_mode:
             output_pairs.append(cells_sel)
-    
+
         #if not caustics_mode:
         output_pairs = np.vstack(output_pairs).reshape((-1,2))
         if self.include_caustics:
             self.critical_lines = np.transpose(np.mean(cells_sel,axis=1)) # don't want the vertices of each cell; just the (center) of each cell
-            
+
         return np.vstack((grid_pairs,output_pairs))
-        
+
     
     
     def generate_ranges(self):
-        '''Generates the sequences used for the other core & gridding functions.
+        """Generates the sequences used for the other core & gridding functions.
         Returns an array containing:
         [ [x,y], [r,theta], [critx, crity], [causticsx, causticsy]]
         where critx,crity refers to the x and y values for the critical curves,
@@ -295,17 +296,17 @@ class gravlens:
         x,y are the cartesian ranges for the originial mesh-grid,
         r,theta are the cartesian x and y values for the supplementary polar grid(s).
         If caustics is set to False, then [critx, crity] and [causticsx, causticsy] are not returned-- Instead just [x,y]  and [r,theta] are returned.
-        '''
-        
-        # initial cartesian grid, coarse,
-        [xlowerend, xupperend, xspacing],[ylowerend,yupperend,yspacing] = self.carargs
+        """
 
-        x = np.arange(xlowerend,xupperend+xspacing,xspacing)
-        y = np.arange(ylowerend,yupperend+yspacing,yspacing)
-    
-        #supplemental polar grid(s)
-        polargrids = np.reshape([],(0,2))
-        
+        # initial cartesian grid, coarse,
+        [xlowerend, xupperend, xspacing], [ylowerend, yupperend, yspacing] = self.carargs
+
+        x = np.arange(xlowerend, xupperend + xspacing, xspacing)
+        y = np.arange(ylowerend, yupperend + yspacing, yspacing)
+
+        # supplemental polar grid(s)
+        polargrids = np.reshape([], (0, 2))
+
         for grid in self.polargs:
             center, rupper, rdivisions, thetadivisions = grid
             
@@ -350,40 +351,43 @@ class gravlens:
         else:
             self.caustics = None
 
-            
+
         dpoints = Delaunay(stack) # generate Delaunay object for triangulization/triangles
 
         self.stack = stack
         self.transformed = transformed
         self.dpoints = dpoints
-        
-        
+
     def find_source(self):
-        '''Employs the algorithm in the 'trinterior' module to find the positions of the image in the image plane. Returns the coordinate pair(s) in an array.'''
+        """Employs the algorithm in the 'trinterior' module to find the positions of the image in the image plane.
+        Returns the coordinate pair(s) in an array.
+        """
 
         simplices = self.dpoints.simplices
-    
-        lenstri = np.take(self.transformed,simplices,axis=0) #triangles on the source plane
-        imagetri= np.take(self.stack,simplices,axis=0) #triangles on the image plane
-    
-        indices = trint.find2(self.image,lenstri) #list of which triangles contain point on source plane
-    
-        sourcetri = imagetri[indices] 
-        sourcepos = np.mean(sourcetri,axis=1) #list of the centroid coordinates for the triangles which contain the point 'image'
+
+        lenstri = np.take(self.transformed, simplices, axis=0)  # triangles on the source plane
+        imagetri = np.take(self.stack, simplices, axis=0)  # triangles on the image plane
+
+        indices = trint.find2(self.image, lenstri)  # list of which triangles contain point on source plane
+
+        sourcetri = imagetri[indices]
+        sourcepos = np.mean(sourcetri,
+                            axis=1)  # list of the centroid coordinates for the triangles which contain the point 'image'
+        # use centroid coordinates as guesses for the actual root finding algorithm
         realpos = np.array(
-            [(op.root(self.mapping,v,jac=True,tol=1e-4)).x
-             for v in sourcepos]) # use centroid coordinates as guesses for the actual root finding algorithm
-    
+            [(op.root(self.mapping, v, jac=True, tol=1e-4)).x for v in sourcepos]
+        )
+
         self.realpos = realpos
-    
+
     def run(self):
         '''The master command that wraps and executes all the commands to run a gridding example. Use this function (excusively) when using this module.'''
                         
         self.validate_arguments()
-        
+
         args = self.generate_ranges()
-        
-        x,y = args[0]
+
+        x, y = args[0]
         polargrids = args[1]
     
         #if self.include_caustics:
@@ -395,7 +399,7 @@ class gravlens:
         self.transformations((x,y),polargrids)
         
         self.find_source()
-        
+
         if self.show_plot:
             self.plot()
 
@@ -410,17 +414,13 @@ class gravlens:
         if not type(self.modelargs) is list:
             raise AssertionError("'modelargs' is not a list of models")
 
-        
+
     def plot(self):
- 
+
         [xlowerend, xupperend, xspacing],[ylowerend,yupperend,yspacing] = self.carargs
         
         plots.source_image_planes(
-                self.stack,self.transformed,self.dpoints.simplices,
-                self.realpos,self.image,
-                xlowerend,xupperend,ylowerend,yupperend,
-                caustics=self.caustics)
-    
-    
-    
-    
+            self.stack, self.transformed, self.dpoints.simplices,
+            self.realpos, self.image,
+            xlowerend, xupperend, ylowerend, yupperend,
+            caustics=self.caustics)
