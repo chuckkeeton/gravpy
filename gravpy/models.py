@@ -1,8 +1,13 @@
-from abc import abstractmethod, ABCMeta
-import pysie, pyalpha
+from abc import ABCMeta, abstractmethod
 from math import sin, cos, pi
 import numpy as np
 from functools import wraps
+from .sie.python import siepy
+from .alpha.python import alphapy
+# f2py modules imported below, clunky pathing due to fortran modules, full function path is fmodel.fmodel.routine
+from .sie.fortran.sief import sief
+from .alpha.fortran.alphaf import alphaf
+from .nfw.fortran.nfwf import nfwf
 from integration import Integrator
 from collections import Iterable
 
@@ -16,8 +21,8 @@ class BaseModel(object):
             x0 {number} -- x position
             y0 {number} -- y position
             e {number} -- ellipticity
-            te {number} -- [description]
-            s {number} -- [description]
+            te {number} -- theta_ellipticity
+            s {number} -- core radius
         """
         self.x0 = x0
         self.y0 = y0
@@ -58,7 +63,7 @@ def standard_frame_rotation(phiarray_function):
         xp = -s * (x - x0) + c * (y - y0)
         yp = -c * (x - x0) - s * (y - y0)
 
-        pot, px, py, pxx, pyy, pxy = phiarray_function(self, xp, yp, *args, **kwargs)
+        pot, px, py, pxx, pyy, pxy = phiarray_function(self, xp, yp, *args, **kwargs)  # get the phiarray values
 
         # Inverse transformation back into desired coordinates.
         new_phix = -s * px - c * py
@@ -77,14 +82,17 @@ class SIE(BaseModel):
         super(SIE, self).__init__(x0, y0, e, te, s)
         self.b = b
 
+    def modelargs(self):
+        return [self.b, self.x0, self.y0, self.e, self.te, self.s]
+
     @standard_frame_rotation
     def phiarray(self, x, y, numexpr=True, *args, **kwargs):
-        modelargs = [self.b, self.x0, self.y0, self.e, self.te, self.s]
+        modelargs = self.modelargs()
 
         if self.e == 0:
-            return pysie.spherical(x, y, modelargs, numexpr=numexpr)
+            return siepy.spherical(x, y, modelargs, numexpr=numexpr)
         else:
-            return pysie.elliptical(x, y, modelargs, numexpr=numexpr)
+            return siepy.elliptical(x, y, modelargs, numexpr=numexpr)
 
 
 class Alpha(BaseModel):
@@ -93,19 +101,26 @@ class Alpha(BaseModel):
         self.b = b
         self.alpha = alpha
 
+    def modelargs(self, alpha=False):
+        if alpha:
+            return [self.b, self.x0, self.y0, self.e, self.te, self.s, self.alpha]
+        else:
+            return [self.b, self.x0, self.y0, self.e, self.te, self.s]
+
     @standard_frame_rotation
     def phiarray(self, x, y, numexpr=True, *args, **kwargs):
-        modelargs = [self.b, self.x0, self.y0, self.e, self.te, self.s]
+        modelargs = self.modelargs()
+        modelargs_with_alpha = self.modelargs(alpha=True)
 
         if self.alpha == 1.0:
             if self.e == 0.0:
-                return pysie.spherical(x, y, modelargs, numexpr=numexpr)
+                return siepy.spherical(x, y, modelargs, numexpr=numexpr)
             else:
-                return pysie.elliptical(x, y, modelargs, numexpr=numexpr)
+                return siepy.elliptical(x, y, modelargs, numexpr=numexpr)
         elif self.alpha == -1.0:
-            return pyalpha.plummer(x, y, modelargs)
+            return alphapy.plummer(x, y, modelargs)
         else:
-            raise Exception("Alpha!=(0 | -1) not implemented yet")
+            return alphaf.general(x, y, modelargs_with_alpha)
 
 
 class NFW(BaseModel):
@@ -138,24 +153,24 @@ class NFW(BaseModel):
 
     @staticmethod
     def funcF(x):
-        dx = x**2 - 1.0
+        dx = x ** 2 - 1.0
         if abs(x) < 1e-2:
             # series with O(x^6) error
             log2x = np.log(2.0 / x)
-            return log2x + x**2 * (0.5 * log2x - 0.25) * x**4 * (0.375 * log2x - 0.21875)
+            return log2x + x ** 2 * (0.5 * log2x - 0.25) * x ** 4 * (0.375 * log2x - 0.21875)
         elif abs(dx) < 1e-2:
             # series with O(dx^6) error
-            return 1.0 - (dx / 3.0) + (dx**2 / 5.0) - (dx**3 / 7.0) + (dx**4 / 9.0) - (dx**5 / 11.0)
+            return 1.0 - (dx / 3.0) + (dx ** 2 / 5.0) - (dx ** 3 / 7.0) + (dx ** 4 / 9.0) - (dx ** 5 / 11.0)
         elif x > 1.0:
-            tmp = np.sqrt(x**2 - 1.0)
+            tmp = np.sqrt(x ** 2 - 1.0)
             return np.arctan(tmp) / tmp
         else:
-            tmp = np.sqrt(1.0 - x**2)
+            tmp = np.sqrt(1.0 - x ** 2)
             return np.arctanh(tmp) / tmp
 
     @staticmethod
     def funcF_prime(x):
-        return (1.0 - x**2 * NFW.funcF(x)) / (x * (x**2 - 1.0))
+        return (1.0 - x ** 2 * NFW.funcF(x)) / (x * (x ** 2 - 1.0))
 
     def kappa(self, r):
         x = r / self.rs
@@ -163,10 +178,10 @@ class NFW(BaseModel):
 
     def kappa_prime(self, r):
         x = r / self.rs
-        numerator = (2.0 * self.rs * self.ks * ((self.rs**2 - r**2) * NFW.funcF_prime(x)
+        numerator = (2.0 * self.rs * self.ks * ((self.rs ** 2 - r ** 2) * NFW.funcF_prime(x)
                                                 + 2.0 * self.rs * r * NFW.funcF(x)
                                                 - 2.0 * self.rs * r))
-        denomenator = (self.rs**2 - r**2)**2
+        denomenator = (self.rs ** 2 - r ** 2) ** 2
         return numerator / denomenator
 
     def phi(self, r):

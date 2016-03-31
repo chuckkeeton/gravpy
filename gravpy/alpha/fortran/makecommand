@@ -1,0 +1,2 @@
+f2py --fcompiler=intelem --opt='-fast' -lcubpack -c asa103.f90 hyp.f alphaf.f90 -m alphaf
+! make sure to have cui.mod from CUBPACK in source dir as well

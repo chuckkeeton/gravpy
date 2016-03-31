@@ -1,16 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-def source_image_planes(stack, transformed,
-                        simplices,
-                        realpos, image,
-                        xlowerend, xupperend, ylowerend, yupperend,
-                        caustics=False):
-    """Uses 'matplotlib' library to view the image and source plane,
-    the triangulization mesh, critical curves, caustics, image and source position.
-    """
-
+def source_image_planes(stack,transformed,
+                simplices,
+                realpos,image,
+                xlowerend,xupperend,ylowerend,yupperend,
+                caustics=False):
+    '''Uses 'matplotlib' library to view the image and source plane, the triangulization mesh, critical curves, caustics, image and source position.'''
+    
     if caustics:
         [critx, crity], [causticsx, causticsy] = caustics
 
