@@ -6,6 +6,7 @@ import numexpr as ne
 if ne.use_vml:
     ne.set_vml_accuracy_mode('fast')
 
+
 class SIE(BaseModel):
     def __init__(self, b, x0, y0, e, te, s):
         super(SIE, self).__init__(x0, y0, e, te)
@@ -24,6 +25,7 @@ class SIE(BaseModel):
             return spherical(x, y, modelargs, numexpr=numexpr)
         else:
             return elliptical(x, y, modelargs, numexpr=numexpr)
+
 
 def elliptical(x, y, modelargs, numexpr=True):
     b, x0, y0, e, te, s = modelargs[:6]
