@@ -26,19 +26,22 @@ def memoize(func):
         'hits': 0,
         'misses': 0,
     }
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         key = (func.func_name,) + tuple(args) + tuple(kwargs.iteritems())
         if key in results:
-            cacheinfo['hits'] = cacheinfo['hits'] + 1
+            cacheinfo['hits'] += 1
             return results[key]
-        cacheinfo['misses'] = cacheinfo['misses'] + 1
+        cacheinfo['misses'] += 1
         result = func(*args, **kwargs)
         results[key] = result
         return result
+
     def getcacheinfo():
         from testutil import total_size
         return cacheinfo['hits'], cacheinfo['misses'], total_size(results)
+
     wrapper.getcacheinfo = getcacheinfo
     return wrapper
 
@@ -58,7 +61,7 @@ class Integrator(object):
         self.kappa = kappa
         self.kappa_prime = kappa_prime
         self.phi_r = phi_r
-    
+
     def phi(self, x, y):
         """Lensing potential"""
         result, err = self.i(x, y)
@@ -87,13 +90,13 @@ class Integrator(object):
         return 2.0 * self.q * x * y * result
 
     def xi(self, x, y):
-        return sqrt(xi_squared(x, y, self.q))
+        return sqrt(self.xi_squared(x, y))
 
     def xi_squared(self, x, y):
-        return x**2 + (y**2 / self.q**2)
+        return x ** 2 + (y ** 2 / self.q ** 2)
 
     def xi_u(self, u, x, y):
-        return sqrt(xi_u_squared(u, x, y, self.q))
+        return sqrt(self.xi_u_squared(u, x, y))
 
     def xi_u_squared(self, u, x, y):
         return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - self.q ** 2) * u))))
@@ -101,7 +104,8 @@ class Integrator(object):
     @memoize
     def i(self, x, y):
         def integrand(u, x, y):
-            return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi(u, x, y)) / (1.0 - (1.0 - self.q**2) * u)**0.5
+            return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi(u, x, y)) / (1.0 - (1.0 - self.q ** 2) * u) ** 0.5
+
         return quad(integrand, 0, 1, args=(x, y))
 
     @memoize
@@ -131,12 +135,14 @@ class Integrator(object):
 
     def jn(self, n):
         def integrand(u, x, y):
-            return self.kappa(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q**2) * u)**(n + 0.5))
+            return self.kappa(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q ** 2) * u) ** (n + 0.5))
+
         return lambda x, y: quad(integrand, 0, 1, args=(x, y))
 
     def kn(self, n):
         def integrand(u, x, y):
-            return u * self.kappa_prime(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q**2) * u)**(n + 0.5))
+            return u * self.kappa_prime(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q ** 2) * u) ** (n + 0.5))
+
         return lambda x, y: quad(integrand, 0, 1, args=(x, y))
 
 # if __name__ == '__main__':
@@ -149,7 +155,7 @@ class Integrator(object):
 #     def sple_kappa_prime(w, alpha, b, s):
 #         # the derivative of kappa over w (xi**2)
 #         return 0.25 * (alpha - 2.0) * b ** (2.0 - alpha) * (s ** 2.0 + w) ** ((alpha / 2.0) - 2.0)
-    
+
 #     ###########
 #     # analytic_answers = sie.elliptical(1, 1, [2.0, None, None, 0.5, None, 0.01])
 
