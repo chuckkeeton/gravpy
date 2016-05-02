@@ -36,29 +36,23 @@ class BaseModel(object):
 
         @wraps(phiarray_function)
         def rotation(self, x, y, *args, **kwargs):
-            x0, y0 = self.x0, self.y0
-            te = self.te
-
-            c = np.cos(te * np.pi / 180)
-            c2 = c * c
-            s = np.sin(te * np.pi / 180)
-            s2 = s * s
-            sc = s * c
+            c = np.cos(self.te * np.pi / 180)
+            s = np.sin(self.te * np.pi / 180)
 
             # transformation from actual coords to natural coords
             # (the frame/axes are rotated so there is no ellipticity angle in the calculation).
             # This makes the expressions in the model modules simpler to calculate.
-            xp = -s * (x - x0) + c * (y - y0)
-            yp = -c * (x - x0) - s * (y - y0)
+            xp = -s * (x - self.x0) + c * (y - self.y0)
+            yp = -c * (x - self.x0) - s * (y - self.y0)
 
             pot, px, py, pxx, pyy, pxy = phiarray_function(self, xp, yp, *args, **kwargs)  # get the phiarray values
 
             # Inverse transformation back into desired coordinates.
             new_phix = -s * px - c * py
             new_phiy = c * px - s * py
-            new_phixx = s2 * pxx + c2 * pyy + 2 * sc * pxy
-            new_phiyy = c2 * pxx + s2 * pyy - 2 * sc * pxy
-            new_phixy = sc * (pyy - pxx) + (s2 - c2) * pxy
+            new_phixx = s**2 * pxx + c**2 * pyy + 2 * s * c * pxy
+            new_phiyy = c**2 * pxx + s**2 * pyy - 2 * s * c * pxy
+            new_phixy = s * c * (pyy - pxx) + (s**2 - c**2) * pxy
 
             return np.array((pot, new_phix, new_phiy, new_phixx, new_phiyy, new_phixy))
 

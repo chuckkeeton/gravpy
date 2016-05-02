@@ -10,7 +10,7 @@ import trinterior as trint
 import plots
 
 
-class Gravlens:
+class Gravlens(object):
     def __init__(self, carargs, polargs, modelargs, show_plot=True, include_caustics=True,
                  image=np.random.uniform(-1, 1, 2), recurse_depth=3, caustics_depth=8, logging_level='info'):
         self.carargs = carargs

@@ -89,22 +89,16 @@ class Integrator(object):
         result, err = self.k1(x, y)
         return 2.0 * self.q * x * y * result
 
-    def xi(self, x, y):
-        return sqrt(self.xi_squared(x, y))
-
-    def xi_squared(self, x, y):
-        return x ** 2 + (y ** 2 / self.q ** 2)
-
     def xi_u(self, u, x, y):
         return sqrt(self.xi_u_squared(u, x, y))
 
     def xi_u_squared(self, u, x, y):
-        return u * (x ** 2 + (y ** 2 / (1.0 - ((1.0 - self.q ** 2) * u))))
+        return u * (x ** 2 + (y ** 2 / (1 - ((1 - (self.q ** 2)) * u))))
 
     @memoize
     def i(self, x, y):
         def integrand(u, x, y):
-            return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi(u, x, y)) / (1.0 - (1.0 - self.q ** 2) * u) ** 0.5
+            return (self.xi_u(u, x, y) / u) * self.phi_r(self.xi_u(u, x, y)) / (1.0 - (1.0 - self.q ** 2) * u) ** 0.5
 
         return quad(integrand, 0, 1, args=(x, y))
 
@@ -135,9 +129,9 @@ class Integrator(object):
 
     def jn(self, n):
         def integrand(u, x, y):
-            return self.kappa(self.xi_u_squared(u, x, y)) / ((1.0 - (1.0 - self.q ** 2) * u) ** (n + 0.5))
+            return self.kappa(self.xi_u_squared(u, x, y)) / ((1 - (1 - (self.q ** 2)) * u) ** (n + 0.5))
 
-        return lambda x, y: quad(integrand, 0, 1, args=(x, y))
+        return lambda x, y: quad(integrand, 0, 1, args=(x, y), limit=100)
 
     def kn(self, n):
         def integrand(u, x, y):
